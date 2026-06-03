@@ -1,0 +1,8 @@
+coldfire-mlx-server
+
+This software is a fork of mlx-openai-server, Copyright (c) 2024 Gia-Huy Vuong, MIT-licensed.
+Original repo: https://github.com/cubist38/mlx-openai-server
+
+Modifications Copyright (c) 2026 Coldfire / getcoldfire.
+
+Third-party license attributions are bundled in NOTICES.txt (generated per release).
