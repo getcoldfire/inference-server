@@ -1,0 +1,114 @@
+"""High-level embedding service.
+
+Wraps the trio of `loader.load_embedding_model`, the `BertModel` encoder
+forward pass, `pooling.apply_pooling`, and `pooling.l2_normalize` into a
+single `EmbeddingService` object that takes a list of strings and returns
+a list of unit-norm embedding vectors plus token-count metadata.
+
+This is the runtime-facing entry point — the OpenAI-compatible `/v1/embeddings`
+route handler in `app/api/endpoints.py` calls into this service via the
+`MLXEmbeddingsHandler` wrapper (which adds the inference-worker queue +
+process-isolation).
+"""
+from __future__ import annotations
+
+from dataclasses import dataclass
+from typing import List
+
+import mlx.core as mx
+
+from app.handler.embeddings.loader import load_embedding_model
+from app.handler.embeddings.pooling import apply_pooling, l2_normalize
+
+
+@dataclass
+class EmbeddingResult:
+    """Return type of `EmbeddingService.embed`.
+
+    Attributes
+    ----------
+    embeddings : list[list[float]]
+        One vector per input string. Each vector has length
+        `hidden_size` (or `matryoshka_dim` when truncation is configured)
+        and L2 norm 1.0.
+    prompt_tokens : int
+        Sum of non-padding tokens across the batch. We do not separately
+        count completion tokens for embedding requests, so total == prompt.
+    total_tokens : int
+        Same as `prompt_tokens` (kept for OpenAI usage-shape parity).
+    """
+
+    embeddings: List[List[float]]
+    prompt_tokens: int
+    total_tokens: int
+
+
+class EmbeddingService:
+    """Stateful embedding service that loads a model once and serves many requests.
+
+    Lifecycle:
+    - `__init__(model_path)` loads the model, tokenizer, and pooling/matryoshka
+      configuration up-front. This is expensive; instantiate once per process.
+    - `embed(inputs)` tokenizes the inputs, runs the encoder forward pass,
+      pools to one vector per input, optionally truncates to `matryoshka_dim`,
+      and L2-normalizes. Returns an `EmbeddingResult`.
+    """
+
+    def __init__(self, model_path: str):
+        (
+            self.model,
+            self.tokenizer,
+            self.pooling_mode,
+            self.matryoshka_dim,
+        ) = load_embedding_model(model_path)
+
+    def embed(self, inputs: List[str]) -> EmbeddingResult:
+        """Embed a batch of input strings.
+
+        Empty `inputs` -> empty result (no tokenizer/model call). This keeps
+        the OpenAI `/v1/embeddings` happy when callers pass `[]`.
+        """
+        if not inputs:
+            return EmbeddingResult(embeddings=[], prompt_tokens=0, total_tokens=0)
+
+        # tokenizer.model_max_length is sometimes a sentinel value
+        # (`int(1e30)`) for models that declare "no max"; clamp to 8192
+        # so tokenize() doesn't allocate an absurd buffer.
+        raw_max = self.tokenizer.model_max_length
+        max_len = raw_max if raw_max < 10000 else 8192
+
+        encoded = self.tokenizer(
+            inputs,
+            padding=True,
+            truncation=True,
+            return_tensors="np",
+            max_length=max_len,
+        )
+        input_ids = mx.array(encoded["input_ids"])
+        attention_mask = mx.array(encoded["attention_mask"])
+
+        # nomic-embed and many other modern embedding models do NOT use
+        # token_type_ids. Pass None when absent; the encoder's BertEmbeddings
+        # module is wired to skip the token-type embedding term in that case.
+        if "token_type_ids" in encoded:
+            token_type_ids = mx.array(encoded["token_type_ids"])
+        else:
+            token_type_ids = None
+
+        hidden = self.model(input_ids, token_type_ids, attention_mask)
+        pooled = apply_pooling(hidden, attention_mask, self.pooling_mode)
+
+        # Matryoshka MUST be applied BEFORE L2 normalization. If we truncated
+        # AFTER normalizing, the truncated vector would have norm < 1 and
+        # downstream cosine similarity would be off. Truncating before lets
+        # the final normalize step re-project onto the unit sphere.
+        if self.matryoshka_dim is not None:
+            pooled = pooled[:, : self.matryoshka_dim]
+
+        normalized = l2_normalize(pooled)
+        prompt_tokens = int(attention_mask.sum().item())
+        return EmbeddingResult(
+            embeddings=normalized.tolist(),
+            prompt_tokens=prompt_tokens,
+            total_tokens=prompt_tokens,
+        )
