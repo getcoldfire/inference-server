@@ -1,0 +1,17 @@
+{
+  "architectures": [
+    "NomicBertModel"
+  ],
+  "model_type": "nomic_bert",
+  "hidden_size": 32,
+  "num_hidden_layers": 2,
+  "num_attention_heads": 4,
+  "intermediate_size": 64,
+  "vocab_size": 256,
+  "max_position_embeddings": 2048,
+  "type_vocab_size": 0,
+  "hidden_act": "swiglu",
+  "position_embedding_type": "rotary",
+  "rope_theta": 10000.0,
+  "layer_norm_eps": 1e-12
+}
