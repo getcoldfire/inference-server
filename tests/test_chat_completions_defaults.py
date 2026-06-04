@@ -17,12 +17,8 @@ def _load_refine_chat_completion_request() -> object:
     fake_lm_module = types.ModuleType("app.handler.mlx_lm")
     fake_lm_module.MLXLMHandler = object
 
-    fake_vlm_module = types.ModuleType("app.handler.mlx_vlm")
-    fake_vlm_module.MLXVLMHandler = object
-
     module_names = [
         "app.handler.mlx_lm",
-        "app.handler.mlx_vlm",
         "app.api.endpoints",
     ]
     original_modules: dict[str, types.ModuleType | None] = {
@@ -31,7 +27,6 @@ def _load_refine_chat_completion_request() -> object:
 
     try:
         sys.modules["app.handler.mlx_lm"] = fake_lm_module
-        sys.modules["app.handler.mlx_vlm"] = fake_vlm_module
         sys.modules.pop("app.api.endpoints", None)
         endpoints_module = importlib.import_module("app.api.endpoints")
         return endpoints_module.refine_chat_completion_request

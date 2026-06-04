@@ -86,13 +86,7 @@ def print_startup_banner(config_args: MLXServerConfig) -> None:
     logger.info(f"🔌 Port: {config_args.port}")
     logger.info(f"⏱️ Queue Timeout: {config_args.queue_timeout} seconds")
     logger.info(f"📊 Queue Size: {config_args.queue_size}")
-    if (
-        hasattr(config_args, "disable_auto_resize")
-        and config_args.disable_auto_resize
-        and config_args.model_type == "multimodal"
-    ):
-        logger.info("🖼️ Auto-resize: Disabled")
-    if config_args.model_type in ["lm", "multimodal"]:
+    if config_args.model_type == "lm":
         if config_args.enable_auto_tool_choice:
             logger.info("🔧 Auto Tool Choice: Enabled")
         if config_args.tool_call_parser:

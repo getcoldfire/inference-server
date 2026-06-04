@@ -99,19 +99,19 @@ def cli():
     "--model-path",
     required=False,
     default=None,
-    help="Path to the model (required for lm, multimodal, embeddings model types).",
+    help="Path to the model (required for lm, embeddings model types).",
 )
 @click.option(
     "--model-type",
     default="lm",
-    type=click.Choice(["lm", "multimodal", "embeddings"]),
-    help="Type of model to run (lm: text-only, multimodal: text+vision, embeddings: text embeddings)",
+    type=click.Choice(["lm", "embeddings"]),
+    help="Type of model to run (lm: text-only, embeddings: text embeddings)",
 )
 @click.option(
     "--context-length",
     default=None,
     type=int,
-    help="Context length for language models. If not specified, uses model default. Only works with `lm` or `multimodal` model types.",
+    help="Context length for language models. If not specified, uses model default. Only works with the `lm` model type.",
 )
 @click.option(
     "--served-model-name",
@@ -171,12 +171,12 @@ def cli():
     "--chat-template-file",
     default=None,
     type=str,
-    help="Path to a custom chat template file. Only works with language models (lm) and multimodal models.",
+    help="Path to a custom chat template file. Only works with language models (lm).",
 )
 @click.option(
     "--debug",
     is_flag=True,
-    help="Enable debug mode for language models. Only works with language models (lm) and multimodal models.",
+    help="Enable debug mode for language models. Only works with language models (lm).",
 )
 @click.option(
     "--prompt-cache-size",
@@ -216,7 +216,7 @@ def cli():
     "--kv-bits",
     default=None,
     type=int,
-    help="Number of bits for KV cache quantization (e.g. 4, 8). Reduces memory usage at the cost of some quality. Only works with 'lm' and 'multimodal' model types.",
+    help="Number of bits for KV cache quantization (e.g. 4, 8). Reduces memory usage at the cost of some quality. Only works with the 'lm' model type.",
 )
 @click.option(
     "--kv-group-size",
@@ -240,7 +240,7 @@ def cli():
     type=int,
     help=(
         "When a request is batchable, decode that many requests in parallel. "
-        "Applies to 'lm' and 'multimodal' model types. Default is 32."
+        "Applies to the 'lm' model type. Default is 32."
     ),
 )
 @click.option(
@@ -250,7 +250,7 @@ def cli():
     type=int,
     help=(
         "When a request is batchable, prefill that many prompts in parallel. "
-        "Applies to 'lm' and 'multimodal' model types. Default is 8."
+        "Applies to the 'lm' model type. Default is 8."
     ),
 )
 @click.option(
@@ -260,7 +260,7 @@ def cli():
     type=int,
     help=(
         "Maximum tokens processed per prefill step during batched generation. "
-        "Applies to 'lm' and 'multimodal' model types. Default is 2048."
+        "Applies to the 'lm' model type. Default is 2048."
     ),
 )
 @click.option(
@@ -268,7 +268,7 @@ def cli():
     is_flag=True,
     default=False,
     help=(
-        "Disable continuous batching for LM/VLM models. Use this when per-request "
+        "Disable continuous batching for LM models. Use this when per-request "
         "positive seeds must be honored."
     ),
 )

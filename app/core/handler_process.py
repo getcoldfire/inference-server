@@ -440,7 +440,7 @@ class HandlerProcessProxy:
     """Proxy that forwards handler method calls to a spawned subprocess.
 
     Exposes the same public interface as the concrete handler classes
-    (``MLXLMHandler``, ``MLXVLMHandler``, etc.) so it can be used as a
+    (``MLXLMHandler``, ``MLXEmbeddingsHandler``, etc.) so it can be used as a
     drop-in replacement in the ``ModelRegistry`` and API endpoints.
 
     A dedicated reader thread continuously drains the response queue and
@@ -454,7 +454,7 @@ class HandlerProcessProxy:
     served_model_name : str
         Unique model identifier in the registry.
     handler_type : str
-        Handler type string (``"lm"``, ``"multimodal"``, ``"embeddings"``).
+        Handler type string (``"lm"``, ``"embeddings"``).
     model_created : int
         Unix timestamp when the handler process was started.
     """
@@ -462,7 +462,6 @@ class HandlerProcessProxy:
     # Maps model_type config values to handler_type strings
     _MODEL_TYPE_TO_HANDLER_TYPE: dict[str, str] = {
         "lm": "lm",
-        "multimodal": "multimodal",
         "embeddings": "embeddings",
     }
     _SAMPLING_DEFAULT_FIELDS: tuple[str, ...] = (
@@ -493,7 +492,7 @@ class HandlerProcessProxy:
         model_cfg_dict : dict[str, Any]
             Serialized ``ModelEntryConfig`` fields.
         model_type : str
-            Model type from config (``"lm"``, ``"multimodal"``, etc.).
+            Model type from config (``"lm"``, ``"embeddings"``).
         model_path : str
             Path to the model.
         served_model_name : str
@@ -1073,39 +1072,6 @@ class HandlerProcessProxy:
             Response dict with ``"response"`` and ``"usage"`` keys.
         """
         return await self._call("generate_text_response", request)
-
-    # -- VLM handler methods --
-
-    async def generate_multimodal_stream(self, request: Any) -> AsyncGenerator[Any, None]:
-        """Forward a streaming multimodal generation request to the subprocess.
-
-        Parameters
-        ----------
-        request : ChatCompletionRequest
-            The multimodal chat completion request.
-
-        Yields
-        ------
-        Any
-            Multimodal generation chunks.
-        """
-        async for chunk in self._call_stream("generate_multimodal_stream", request):
-            yield chunk
-
-    async def generate_multimodal_response(self, request: Any) -> dict[str, Any]:
-        """Forward a non-streaming multimodal generation request to the subprocess.
-
-        Parameters
-        ----------
-        request : ChatCompletionRequest
-            The multimodal chat completion request.
-
-        Returns
-        -------
-        dict[str, Any]
-            Response dict with ``"response"`` and ``"usage"`` keys.
-        """
-        return await self._call("generate_multimodal_response", request)
 
     # -- Embeddings handler methods --
 

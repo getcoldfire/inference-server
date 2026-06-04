@@ -122,7 +122,7 @@ def create_lifespan(config_args: MLXServerConfig):
 
     - Determine the model identifier from the provided ``config_args``
     - Instantiate the appropriate MLX handler based on ``model_type``
-      (multimodal, embeddings, or text LM)
+      (embeddings or text LM)
     - Initialize the handler (including queuing and concurrency setup)
     - Perform an initial memory cleanup
 
@@ -228,32 +228,6 @@ def create_handler_from_config(model_cfg: ModelEntryConfig) -> Any:
         is invalid for the given type.
     """
     model_path = model_cfg.model_path
-
-    if model_cfg.model_type == "multimodal":
-        from .handler.mlx_vlm import MLXVLMHandler
-
-        return _attach_sampling_defaults(
-            MLXVLMHandler(
-                model_path=model_path,
-                context_length=model_cfg.context_length,
-                disable_auto_resize=model_cfg.disable_auto_resize,
-                enable_auto_tool_choice=model_cfg.enable_auto_tool_choice,
-                tool_call_parser=model_cfg.tool_call_parser,
-                reasoning_parser=model_cfg.reasoning_parser,
-                message_converter=model_cfg.message_converter,
-                trust_remote_code=model_cfg.trust_remote_code,
-                chat_template_file=model_cfg.chat_template_file,
-                debug=model_cfg.debug,
-                kv_bits=model_cfg.kv_bits,
-                kv_group_size=model_cfg.kv_group_size,
-                quantized_kv_start=model_cfg.quantized_kv_start,
-                batch_completion_size=model_cfg.batch_completion_size,
-                batch_prefill_size=model_cfg.batch_prefill_size,
-                batch_prefill_step_size=model_cfg.batch_prefill_step_size,
-                disable_batching=model_cfg.disable_batching,
-            ),
-            model_cfg,
-        )
 
     if model_cfg.model_type == "embeddings":
         from .handler.mlx_embeddings import MLXEmbeddingsHandler

@@ -10,7 +10,7 @@ class ModelMetadata(BaseModel):
     Attributes
     ----------
         id: Unique identifier for the model
-        type: Model type (lm, multimodal, embeddings, etc.)
+        type: Model type (lm, embeddings, etc.)
         context_length: Maximum context length (if applicable)
         created_at: Timestamp when model was loaded
         capabilities: Optional dict of model capabilities
@@ -21,7 +21,7 @@ class ModelMetadata(BaseModel):
     id: str = Field(..., description="Unique model identifier")
     type: str = Field(
         ...,
-        description="Model type (lm, multimodal, embeddings, image-generation, image-edit)",
+        description="Model type (lm, embeddings)",
     )
     context_length: int | None = Field(
         None, description="Maximum context length for language models"

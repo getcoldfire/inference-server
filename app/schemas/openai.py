@@ -81,56 +81,6 @@ class ErrorResponse(OpenAIBaseModel):
 
 
 # Common models used in both streaming and non-streaming contexts
-class ImageURL(OpenAIBaseModel):
-    """Represents an image URL or base64 encoded image data."""
-
-    url: str = Field(..., description="Either a URL of the image or the base64 encoded image data.")
-
-
-class ChatCompletionContentPartImage(OpenAIBaseModel):
-    """Represents an image content part in a chat completion message."""
-
-    image_url: ImageURL | None = Field(
-        None, description="Either a URL of the image or the base64 encoded image data."
-    )
-    type: Literal["image_url"] = Field(..., description="The type of content, e.g., 'image_url'.")
-
-
-class VideoURL(OpenAIBaseModel):
-    """Represents a video URL or base64 encoded video data."""
-
-    url: str = Field(..., description="Either a URL of the video or the base64 encoded video data.")
-
-
-class ChatCompletionContentPartVideo(OpenAIBaseModel):
-    """Represents a video content part in a chat completion message."""
-
-    video_url: VideoURL | None = Field(
-        None, description="Either a URL of the video or the base64 encoded video data."
-    )
-    type: Literal["video_url"] = Field(..., description="The type of content, e.g., 'video_url'.")
-
-
-class InputAudio(OpenAIBaseModel):
-    """Represents input audio data."""
-
-    data: str = Field(
-        ..., description="Either a URL of the audio or the base64 encoded audio data."
-    )
-    format: Literal["mp3", "wav"] = Field(..., description="The audio format.")
-
-
-class ChatCompletionContentPartInputAudio(OpenAIBaseModel):
-    """Represents an input audio content part in a chat completion message."""
-
-    input_audio: InputAudio | None = Field(
-        None, description="Either a URL of the audio or the base64 encoded audio data."
-    )
-    type: Literal["input_audio"] = Field(
-        ..., description="The type of content, e.g., 'input_audio'."
-    )
-
-
 class ChatCompletionContentPartText(OpenAIBaseModel):
     """Represents a text content part in a chat completion message."""
 
@@ -138,12 +88,7 @@ class ChatCompletionContentPartText(OpenAIBaseModel):
     type: Literal["text"] = Field(..., description="The type of content, e.g., 'text'.")
 
 
-ChatCompletionContentPart = (
-    ChatCompletionContentPartImage
-    | ChatCompletionContentPartVideo
-    | ChatCompletionContentPartInputAudio
-    | ChatCompletionContentPartText
-)
+ChatCompletionContentPart = ChatCompletionContentPartText
 
 
 class PromptTokenUsageInfo(OpenAIBaseModel):
@@ -201,7 +146,7 @@ class Message(OpenAIBaseModel):
 
     content: str | list[ChatCompletionContentPart] | None = Field(
         None,
-        description="The content of the message, either text or a list of content items (vision, audio, or multimodal).",
+        description="The content of the message, either text or a list of text content items.",
     )
     refusal: str | None = Field(None, description="The refusal reason, if any.")
     role: Literal["system", "user", "assistant", "tool"] = Field(

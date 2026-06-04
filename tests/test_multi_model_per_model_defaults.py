@@ -65,12 +65,8 @@ def _load_endpoints_module() -> Any:
     fake_lm_module = types.ModuleType("app.handler.mlx_lm")
     fake_lm_module.MLXLMHandler = object
 
-    fake_vlm_module = types.ModuleType("app.handler.mlx_vlm")
-    fake_vlm_module.MLXVLMHandler = object
-
     module_names = [
         "app.handler.mlx_lm",
-        "app.handler.mlx_vlm",
         "app.api.endpoints",
     ]
     original_modules: dict[str, types.ModuleType | None] = {
@@ -79,7 +75,6 @@ def _load_endpoints_module() -> Any:
 
     try:
         sys.modules["app.handler.mlx_lm"] = fake_lm_module
-        sys.modules["app.handler.mlx_vlm"] = fake_vlm_module
         sys.modules.pop("app.api.endpoints", None)
         return importlib.import_module("app.api.endpoints")
     finally:

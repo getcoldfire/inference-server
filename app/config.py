@@ -84,11 +84,11 @@ class MLXServerConfig:
     def __post_init__(self) -> None:
         """Normalize certain CLI fields after instantiation."""
 
-        # KV cache quantization is only supported for lm and multimodal model types
-        if self.kv_bits is not None and self.model_type not in {"lm", "multimodal"}:
+        # KV cache quantization is only supported for lm model type
+        if self.kv_bits is not None and self.model_type != "lm":
             logger.warning(
-                "KV cache quantization (--kv-bits) is only supported for model types 'lm' and "
-                "'multimodal'. Ignoring KV cache quantization options."
+                "KV cache quantization (--kv-bits) is only supported for model type 'lm'. "
+                "Ignoring KV cache quantization options."
             )
             self.kv_bits = None
 
@@ -103,7 +103,7 @@ class MLXServerConfig:
 
         if self.message_converter is not None:
             self.message_converter = self.message_converter.lower()
-        elif self.model_type in {"lm", "multimodal"}:
+        elif self.model_type == "lm":
             self.message_converter = resolve_message_converter_name(
                 tool_parser_name=self.tool_call_parser,
                 reasoning_parser_name=self.reasoning_parser,
@@ -188,7 +188,7 @@ class MLXServerConfig:
 # Multi-model YAML configuration
 # ---------------------------------------------------------------------------
 
-VALID_MODEL_TYPES = frozenset({"lm", "multimodal", "embeddings"})
+VALID_MODEL_TYPES = frozenset({"lm", "embeddings"})
 
 
 @dataclass
@@ -214,7 +214,7 @@ class ModelEntryConfig:
     on_demand: bool = False
     on_demand_idle_timeout: int = 60  # seconds before unloading idle on-demand model
 
-    # LM / multimodal options
+    # LM options
     disable_auto_resize: bool = False
     enable_auto_tool_choice: bool = False
     tool_call_parser: str | None = None
@@ -259,10 +259,10 @@ class ModelEntryConfig:
             )
             raise ValueError(msg)
 
-        # KV cache quantization is LM/multimodal-only
-        if self.kv_bits is not None and self.model_type not in {"lm", "multimodal"}:
+        # KV cache quantization is LM-only
+        if self.kv_bits is not None and self.model_type != "lm":
             logger.warning(
-                "KV cache quantization is only supported for 'lm' and 'multimodal'. "
+                "KV cache quantization is only supported for 'lm'. "
                 "Ignoring for model '%s'.",
                 self.model_path,
             )
@@ -279,7 +279,7 @@ class ModelEntryConfig:
 
         if self.message_converter is not None:
             self.message_converter = self.message_converter.lower()
-        elif self.model_type in {"lm", "multimodal"}:
+        elif self.model_type == "lm":
             self.message_converter = resolve_message_converter_name(
                 tool_parser_name=self.tool_call_parser,
                 reasoning_parser_name=self.reasoning_parser,

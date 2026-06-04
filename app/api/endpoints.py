@@ -22,7 +22,6 @@ from openai.types.responses.response_reasoning_item import Content, ResponseReas
 
 from ..schemas.openai import (
     ChatCompletionChunk,
-    ChatCompletionContentPartImage,
     ChatCompletionContentPartText,
     ChatCompletionMessageToolCall,
     ChatCompletionRequest,
@@ -38,7 +37,6 @@ from ..schemas.openai import (
     FunctionCall,
     HealthCheckResponse,
     HealthCheckStatus,
-    ImageURL,
     InputTokensDetails,
     Message,
     Model,
@@ -54,7 +52,6 @@ from ..schemas.openai import (
 
 if TYPE_CHECKING:
     from ..handler.mlx_lm import MLXLMHandler
-    from ..handler.mlx_vlm import MLXVLMHandler
 from ..utils.debug_logging import log_debug_server_request
 from ..utils.errors import create_error_response
 
@@ -75,7 +72,7 @@ def _get_handler_type(handler: Any) -> str:
     Returns
     -------
     str
-        Handler type string (``"lm"``, ``"multimodal"``, ``"embeddings"``),
+        Handler type string (``"lm"``, ``"embeddings"``),
         or ``""`` if not determinable.
     """
     return getattr(handler, "handler_type", "")
@@ -84,7 +81,7 @@ def _get_handler_type(handler: Any) -> str:
 def _is_text_compatible_handler(handler: Any | None) -> bool:
     """Return whether a handler can serve chat/Responses text requests."""
 
-    return _get_handler_type(handler) in ("lm", "multimodal")
+    return _get_handler_type(handler) == "lm"
 
 
 async def _resolve_handler(
@@ -420,7 +417,7 @@ async def queue_stats(raw_request: Request) -> dict[str, Any] | JSONResponse:
     """
     Get queue statistics.
 
-    Note: queue_stats shape is handler-dependent (LM/VLM/embeddings)
+    Note: queue_stats shape is handler-dependent (LM/embeddings)
     so callers know keys may vary.
     """
     handler = getattr(raw_request.app.state, "handler", None)
@@ -587,7 +584,7 @@ async def chat_completions(
         request = refine_chat_completion_request(request, handler)
 
         handler_type = _get_handler_type(handler)
-        if handler_type not in ("lm", "multimodal"):
+        if handler_type != "lm":
             return JSONResponse(
                 content=create_error_response(
                     "Unsupported model type for chat completions. "
@@ -609,8 +606,6 @@ async def chat_completions(
             )
 
         try:
-            if handler_type == "multimodal":
-                return await process_multimodal_request(handler, request, request_id)
             return await process_text_request(handler, request, request_id)
         except HTTPException:
             raise
@@ -915,34 +910,8 @@ async def handle_stream_response(
         yield "data: [DONE]\n\n"
 
 
-async def process_multimodal_request(
-    handler: MLXVLMHandler, request: ChatCompletionRequest, request_id: str | None = None
-) -> ChatCompletionResponse | StreamingResponse | JSONResponse:
-    """Process multimodal-specific requests."""
-    if request_id:
-        logger.info(f"Processing multimodal request [request_id={request_id}]")
-
-    if request.stream:
-        return StreamingResponse(
-            handle_stream_response(
-                handler.generate_multimodal_stream(request), request.model, request_id
-            ),
-            media_type="text/event-stream",
-            headers={
-                "Cache-Control": "no-cache",
-                "Connection": "keep-alive",
-                "X-Accel-Buffering": "no",
-            },
-        )
-    result = await handler.generate_multimodal_response(request)
-    response_data = result.get("response")
-    usage = result.get("usage")
-    final_response = format_final_response(response_data, request.model, request_id, usage)
-    return JSONResponse(content=final_response.model_dump(exclude_none=True))
-
-
 async def process_text_request(
-    handler: MLXLMHandler | MLXVLMHandler,
+    handler: MLXLMHandler,
     request: ChatCompletionRequest,
     request_id: str | None = None,
 ) -> ChatCompletionResponse | StreamingResponse | JSONResponse:
@@ -1113,8 +1082,12 @@ def _serialize_responses_tool_output(output: Any) -> str:
 
 def _convert_responses_content(
     role: str, content: Any
-) -> str | list[ChatCompletionContentPartText | ChatCompletionContentPartImage]:
-    """Convert Responses message content into chat completion content."""
+) -> str | list[ChatCompletionContentPartText]:
+    """Convert Responses message content into chat completion content (text only).
+
+    Image / audio / video parts from the input are ignored at v0.1 since
+    multimodal handling has been removed from this fork.
+    """
     if isinstance(content, str):
         return content
     if not isinstance(content, list):
@@ -1131,7 +1104,7 @@ def _convert_responses_content(
                     text_parts.append(str(text))
         return "\n".join(text_parts)
 
-    converted: list[ChatCompletionContentPartText | ChatCompletionContentPartImage] = []
+    converted: list[ChatCompletionContentPartText] = []
     for part in content:
         normalized = _normalize_responses_item(part)
         part_type = normalized.get("type")
@@ -1139,13 +1112,6 @@ def _convert_responses_content(
             text = normalized.get("text")
             if text:
                 converted.append(ChatCompletionContentPartText(type="text", text=str(text)))
-        elif part_type in {"input_image", "image_url"} and normalized.get("image_url"):
-            converted.append(
-                ChatCompletionContentPartImage(
-                    type="image_url",
-                    image_url=ImageURL(url=str(normalized["image_url"])),
-                )
-            )
     return converted or ""
 
 
@@ -1197,7 +1163,7 @@ def _process_responses_item(
     item: dict[str, Any],
     chat_messages: list[Message],
     pending_tool_calls: list[ChatCompletionMessageToolCall],
-    pending_user_parts: list[ChatCompletionContentPartText | ChatCompletionContentPartImage],
+    pending_user_parts: list[ChatCompletionContentPartText],
     flush_pending_user_parts: Callable[[], None],
     flush_pending_tool_calls: Callable[[], None],
 ) -> None:
@@ -1303,20 +1269,13 @@ def _process_responses_item(
         text = item.get("text")
         if text:
             pending_user_parts.append(ChatCompletionContentPartText(type="text", text=str(text)))
-    elif item_type in {"input_image", "image_url"} and item.get("image_url"):
-        pending_user_parts.append(
-            ChatCompletionContentPartImage(
-                type="image_url",
-                image_url=ImageURL(url=str(item["image_url"])),
-            )
-        )
 
 
 def convert_responses_request_to_chat_request(request: ResponsesRequest) -> ChatCompletionRequest:
     """Convert a Responses request into a ChatCompletionRequest with full turn history."""
     chat_messages: list[Message] = []
     pending_tool_calls: list[ChatCompletionMessageToolCall] = []
-    pending_user_parts: list[ChatCompletionContentPartText | ChatCompletionContentPartImage] = []
+    pending_user_parts: list[ChatCompletionContentPartText] = []
 
     def flush_pending_user_parts() -> None:
         if pending_user_parts:
@@ -1902,35 +1861,6 @@ async def process_text_responses_request(
     return JSONResponse(content=final_response.model_dump(exclude_none=True))
 
 
-async def process_multimodal_responses_request(
-    handler: MLXVLMHandler,
-    request: ResponsesRequest,
-) -> ResponsesResponse | StreamingResponse | JSONResponse:
-    """Handle multimodal Responses API requests."""
-    refined_request = refine_responses_request(request, handler)
-    chat_request = convert_responses_request_to_chat_request(refined_request)
-
-    if refined_request.stream:
-        return StreamingResponse(
-            handle_responses_stream_response(
-                handler.generate_multimodal_stream(chat_request),
-                refined_request,
-            ),
-            media_type="text/event-stream",
-            headers={
-                "Cache-Control": "no-cache",
-                "Connection": "keep-alive",
-                "X-Accel-Buffering": "no",
-            },
-        )
-
-    result = await handler.generate_multimodal_response(chat_request)
-    response_data = result.get("response")
-    usage = result.get("usage")
-    final_response = format_final_responses_response(response_data, refined_request, usage)
-    return JSONResponse(content=final_response.model_dump(exclude_none=True))
-
-
 @router.post("/v1/responses", response_model=None)
 async def responses_endpoint(
     request: ResponsesRequest, raw_request: Request
@@ -1965,7 +1895,7 @@ async def responses_endpoint(
             request.model = Config.TEXT_MODEL
 
         handler_type = _get_handler_type(handler)
-        if handler_type not in ("lm", "multimodal"):
+        if handler_type != "lm":
             return JSONResponse(
                 content=create_error_response(
                     "Unsupported model type for responses. "
@@ -1986,8 +1916,6 @@ async def responses_endpoint(
             )
 
         try:
-            if handler_type == "multimodal":
-                return await process_multimodal_responses_request(handler, request)
             return await process_text_responses_request(handler, request)
         except HTTPException:
             raise

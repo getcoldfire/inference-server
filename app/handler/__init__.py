@@ -1,12 +1,11 @@
 """
-MLX model handlers for text, multimodal, and embeddings models.
+MLX model handlers for text and embeddings models.
 """
 
 from typing import Any
 
 __all__ = [
     "MLXLMHandler",
-    "MLXVLMHandler",
     "MLXEmbeddingsHandler",
 ]
 
@@ -17,10 +16,6 @@ def __getattr__(name: str) -> Any:
         from .mlx_lm import MLXLMHandler
 
         return MLXLMHandler
-    if name == "MLXVLMHandler":
-        from .mlx_vlm import MLXVLMHandler
-
-        return MLXVLMHandler
     if name == "MLXEmbeddingsHandler":
         from .mlx_embeddings import MLXEmbeddingsHandler
 

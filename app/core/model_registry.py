@@ -65,9 +65,9 @@ class ModelRegistry:
         model_id : str
             Unique identifier for the model (used in API ``model`` field).
         handler : Any
-            Handler instance (``MLXLMHandler``, ``MLXVLMHandler``, etc.).
+            Handler instance (``MLXLMHandler``, ``MLXEmbeddingsHandler``, etc.).
         model_type : str
-            Type of model (``lm``, ``multimodal``, ``embeddings``, etc.).
+            Type of model (``lm``, ``embeddings``, etc.).
         context_length : int | None, optional
             Maximum context length (if applicable).
 
