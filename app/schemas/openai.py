@@ -342,16 +342,27 @@ class ChatCompletionChunk(OpenAIBaseModel):
 
 # Embedding models
 class EmbeddingRequest(OpenAIBaseModel):
-    """Model for embedding requests."""
+    """OpenAI-compatible embedding request.
+
+    The vestigial multimodal `image_url` field from the upstream schema was
+    removed in the Coldfire fork — multimodal embedding is out of scope for
+    v0.1 (see the fork spec). Pure text-in / vector-out.
+    """
 
     model: str = Field(Config.EMBEDDING_MODEL, description="The embedding model to use.")
     input: list[str] | str = Field(
-        ..., description="List of text inputs for embedding or the image file to embed."
+        ..., description="A single text input or a list of text inputs to embed."
     )
-    image_url: str | None = Field(default=None, description="Image URL to embed.")
     user: str | None = Field(default=None, description="User identifier.")
     encoding_format: Literal["float", "base64"] = Field(
         default="float", description="The encoding format for the embedding."
+    )
+    dimensions: int | None = Field(
+        default=None,
+        description=(
+            "Optional truncation dimension (matryoshka). When set, requests an "
+            "output vector of this many dimensions instead of the model's native size."
+        ),
     )
 
 

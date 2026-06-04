@@ -1,3 +1,20 @@
 {
-  "overrides": []
+  "overrides": [
+    {
+      "name": "openai-harmony",
+      "license": "UNKNOWN",
+      "actual_license": "MIT",
+      "reviewer": "coldfire-mlx-server-fork",
+      "date": "2026-06-04",
+      "rationale": "OpenAI ships openai-harmony 0.0.8 with empty PEP-621 license metadata. Source repo https://github.com/openai/harmony is MIT-licensed (verified at the commit corresponding to the 0.0.8 release tag). This override accepts the dep until upstream sets the metadata."
+    },
+    {
+      "name": "sentencepiece",
+      "license": "UNKNOWN",
+      "actual_license": "Apache-2.0",
+      "reviewer": "coldfire-mlx-server-fork",
+      "date": "2026-06-04",
+      "rationale": "Google's sentencepiece 0.2.1 ships with empty PEP-621 license metadata. Source repo https://github.com/google/sentencepiece is Apache-2.0 (verified). Pulled in transitively by mlx-lm. This override accepts the dep until upstream sets the metadata."
+    }
+  ]
 }
