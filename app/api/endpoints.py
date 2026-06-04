@@ -321,11 +321,16 @@ def _should_preserve_legacy_responses_model(
 
 
 @router.get("/health", response_model=None)
+@router.get("/healthz", response_model=None)
 async def health(raw_request: Request) -> HealthCheckResponse | JSONResponse:
     """Health check endpoint - verifies handler initialization status.
 
     Returns 503 if handler is not initialized, 200 otherwise.
     In multi-handler mode reports the number of loaded models.
+
+    Exposed at both ``/health`` (legacy) and ``/healthz`` (Kubernetes / cli-v2
+    convention). Both routes share this single handler and return identical
+    payloads.
     """
     registry = getattr(raw_request.app.state, "registry", None)
     if registry is not None:
