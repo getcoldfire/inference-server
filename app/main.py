@@ -23,9 +23,14 @@ Run multi-handler mode from YAML config:
 
 from __future__ import annotations
 
+import asyncio
 from dataclasses import MISSING, fields
+import multiprocessing as mp
 import os
+import signal
 import sys
+import threading
+import time
 
 from loguru import logger
 import uvicorn
@@ -33,6 +38,11 @@ import uvicorn
 from .config import MLXServerConfig, ModelEntryConfig, MultiModelServerConfig
 from .server import setup_server
 from .version import __version__
+
+
+# Total wall-clock budget (seconds) from first SIGTERM/SIGINT until process exit.
+# Per the cli-v2 contract: SIGTERM must produce exit code 0 within 5 seconds.
+SHUTDOWN_DEADLINE_SECONDS: float = 5.0
 
 _MODEL_ENTRY_DEFAULTS = {
     field.name: (field.default_factory() if field.default_factory is not MISSING else field.default)
@@ -231,6 +241,97 @@ def _apply_sampling_env(config: MLXServerConfig) -> None:
         os.environ["DEFAULT_REPETITION_CONTEXT_SIZE"] = str(config.default_repetition_context_size)
 
 
+def _force_kill_children() -> None:
+    """SIGKILL any surviving multiprocessing-spawned handler children.
+
+    Called from the shutdown watchdog when normal cleanup exceeds the
+    5 s budget. Uses ``mp.active_children()`` rather than chasing
+    ``HandlerProcessProxy`` references because the latter may be
+    half-torn-down or unreachable from the main thread.
+    """
+    for child in mp.active_children():
+        try:
+            child.kill()
+        except (OSError, ProcessLookupError, ValueError):
+            pass
+
+
+def _arm_shutdown_watchdog(server: uvicorn.Server) -> threading.Event:
+    """Install SIGTERM/SIGINT handlers that enforce the 5 s exit deadline.
+
+    On the first signal:
+      1. ``server.should_exit`` is set so uvicorn returns from
+         ``serve()`` and the FastAPI lifespan starts its cleanup.
+      2. A daemon thread starts a 5 s wall-clock timer; if the process
+         is still running when it expires, surviving handler
+         subprocesses are SIGKILLed and the process exits with code 0
+         via ``os._exit``. Exit code 0 is the cli-v2 contract: a
+         caller-initiated SIGTERM is a clean shutdown, not a failure.
+
+    On a second signal (double Ctrl-C), exit immediately with code 0.
+
+    Returns
+    -------
+    threading.Event
+        An event set when the first signal is observed. Tests can wait
+        on this to confirm the handler fired.
+    """
+    triggered = threading.Event()
+
+    def _watchdog() -> None:
+        deadline = time.monotonic() + SHUTDOWN_DEADLINE_SECONDS
+        while time.monotonic() < deadline:
+            time.sleep(0.05)
+        # Budget exceeded: kill any lingering MLX handler subprocesses, then
+        # hard-exit the parent. We exit 0 because the operator (or launchd)
+        # asked us to stop; exceeding the soft drain budget is not a failure
+        # mode the caller cares about.
+        logger.warning(
+            f"Shutdown exceeded {SHUTDOWN_DEADLINE_SECONDS}s budget; "
+            "force-killing handler subprocesses and exiting."
+        )
+        _force_kill_children()
+        os._exit(0)
+
+    def _on_signal(signum: int, _frame: object) -> None:
+        if triggered.is_set():
+            # Second signal: caller wants out immediately.
+            logger.warning(f"Received signal {signum} during shutdown; exiting now.")
+            _force_kill_children()
+            os._exit(0)
+        triggered.set()
+        logger.info(f"Received signal {signum}; initiating graceful shutdown.")
+        server.should_exit = True
+        threading.Thread(target=_watchdog, name="shutdown-watchdog", daemon=True).start()
+
+    signal.signal(signal.SIGTERM, _on_signal)
+    signal.signal(signal.SIGINT, _on_signal)
+    return triggered
+
+
+async def _serve_with_watchdog(server: uvicorn.Server) -> None:
+    """Run ``server.serve()`` with our 5 s shutdown contract installed.
+
+    The signal handlers must be installed *before* ``serve()`` is
+    awaited so that they pre-empt uvicorn's own ``capture_signals``.
+    Uvicorn re-installs its handlers inside ``serve()``; we re-arm ours
+    after a short delay to win the race for any subsequent signal.
+    """
+    _arm_shutdown_watchdog(server)
+
+    async def _rearm_after_uvicorn() -> None:
+        # uvicorn's capture_signals overrides our handlers as soon as
+        # serve() starts; wait briefly then re-install ours.
+        await asyncio.sleep(0.2)
+        _arm_shutdown_watchdog(server)
+
+    rearm_task = asyncio.create_task(_rearm_after_uvicorn())
+    try:
+        await server.serve()
+    finally:
+        rearm_task.cancel()
+
+
 async def start(config: MLXServerConfig) -> None:
     """Run the ASGI server using the provided configuration.
 
@@ -254,7 +355,7 @@ async def start(config: MLXServerConfig) -> None:
         logger.info("Server configuration complete.")
         logger.info("Starting Uvicorn server...")
         server = uvicorn.Server(uvconfig)
-        await server.serve()
+        await _serve_with_watchdog(server)
     except KeyboardInterrupt:
         logger.info("Server shutdown requested by user. Exiting...")
     except Exception as e:
@@ -280,7 +381,7 @@ async def start_multi(config: MultiModelServerConfig) -> None:
         logger.info("Multi-handler server configuration complete.")
         logger.info("Starting Uvicorn server...")
         server = uvicorn.Server(uvconfig)
-        await server.serve()
+        await _serve_with_watchdog(server)
     except KeyboardInterrupt:
         logger.info("Server shutdown requested by user. Exiting...")
     except Exception as e:
