@@ -611,7 +611,9 @@ async def chat_completions(
             )
 
         try:
-            return await process_text_request(handler, request, request_id)
+            return await process_text_request(
+                handler, request, request_id, raw_request=raw_request
+            )
         except HTTPException:
             raise
         except Exception as e:
@@ -813,9 +815,21 @@ def _yield_sse_chunk(data: dict[str, Any] | ChatCompletionChunk) -> str:
 
 
 async def handle_stream_response(
-    generator: AsyncGenerator[Any, None], model: str, request_id: str | None = None
+    generator: AsyncGenerator[Any, None],
+    model: str,
+    request_id: str | None = None,
+    raw_request: Request | None = None,
 ) -> AsyncGenerator[str, None]:
-    """Handle streaming response generation (OpenAI-compatible)."""
+    """Handle streaming response generation (OpenAI-compatible).
+
+    If ``raw_request`` is provided, the wrapper polls
+    ``raw_request.is_disconnected()`` between chunks and stops iterating /
+    closes the source generator when the client has hung up. Closing the
+    source generator triggers ``HandlerProcessProxy._call_stream``'s ``finally``
+    block, which sends ``_CANCEL`` to the handler subprocess and ultimately
+    sets the per-request ``cancel_event`` in ``BatchScheduler`` (upstream
+    issue #302).
+    """
     chat_index = get_id()
     created_time = int(time.time())
     finish_reason = "stop"
@@ -836,6 +850,18 @@ async def handle_stream_response(
         yield _yield_sse_chunk(first_chunk)
 
         async for chunk in generator:
+            # Mid-stream client-disconnect propagation (upstream #302). We
+            # check BEFORE processing each chunk so we don't waste cycles
+            # formatting SSE for a hung-up client, and we close the source
+            # generator on the way out via the surrounding try/finally so the
+            # handler subprocess receives _CANCEL promptly.
+            if raw_request is not None and await raw_request.is_disconnected():
+                logger.debug(
+                    "client disconnected mid-stream; closing source generator "
+                    f"[request_id={request_id}]"
+                )
+                break
+
             if not chunk:
                 continue
 
@@ -899,6 +925,22 @@ async def handle_stream_response(
         )
         yield _yield_sse_chunk(error_response)
     finally:
+        # Eagerly close the source generator so its `finally`/`aclose` runs.
+        # In the disconnect path (upstream #302) this is what triggers
+        # `_call_stream` to send `_CANCEL` to the handler subprocess and
+        # ultimately set the per-request `cancel_event` in `BatchScheduler`.
+        # In the normal-completion path it's a no-op (generator already
+        # exhausted) but cheap, so we run unconditionally.
+        try:
+            await generator.aclose()
+        except Exception:
+            # aclose() raising is non-fatal: we still need to emit the final
+            # SSE chunks so well-behaved clients close cleanly.
+            logger.debug(
+                f"source generator aclose() raised [request_id={request_id}]",
+                exc_info=True,
+            )
+
         # Final chunk: finish_reason with usage info, as per OpenAI
         final_chunk = ChatCompletionChunk(
             id=chat_index,
@@ -919,8 +961,14 @@ async def process_text_request(
     handler: MLXLMHandler,
     request: ChatCompletionRequest,
     request_id: str | None = None,
+    raw_request: Request | None = None,
 ) -> ChatCompletionResponse | StreamingResponse | JSONResponse:
-    """Process text-only requests."""
+    """Process text-only requests.
+
+    ``raw_request`` is forwarded into the streaming wrapper so it can detect
+    client disconnects (upstream #302) and propagate cancellation to the
+    handler subprocess.
+    """
     if request_id:
         logger.info(f"Processing text request [request_id={request_id}]")
 
@@ -930,6 +978,7 @@ async def process_text_request(
                 handler.generate_text_stream(request),  # type: ignore[union-attr]
                 request.model,
                 request_id,
+                raw_request=raw_request,
             ),
             media_type="text/event-stream",
             headers={
