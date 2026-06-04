@@ -9,6 +9,7 @@ runs in multi-handler mode, loading multiple models at once.
 from __future__ import annotations
 
 import asyncio
+from pathlib import Path
 import sys
 
 import click
@@ -18,6 +19,29 @@ from .config import MLXServerConfig, load_config_from_yaml
 from .main import start_multi
 from .parsers import REASONING_PARSER_MAP, TOOL_PARSER_MAP, UNIFIED_PARSER_MAP
 from .version import __version__
+
+
+# cli-v2 spec contract (§4): accepts info|debug|warn|error in any case.
+# We translate to the internal loguru levels used by the rest of the app.
+# Aliases keep the older verbose names ("WARNING", "CRITICAL") working so
+# existing scripts/Makefiles don't break.
+_LOG_LEVEL_CHOICES: tuple[str, ...] = (
+    "DEBUG",
+    "INFO",
+    "WARN",
+    "WARNING",
+    "ERROR",
+    "CRITICAL",
+)
+_LOG_LEVEL_ALIASES: dict[str, str] = {"WARN": "WARNING"}
+
+
+def _resolve_log_level(value: str | None) -> str:
+    """Canonicalize ``--log-level`` input to a loguru-compatible name."""
+    if value is None:
+        return "INFO"
+    upper = value.upper()
+    return _LOG_LEVEL_ALIASES.get(upper, upper)
 
 
 class UpperChoice(click.Choice):
@@ -69,6 +93,32 @@ logger.add(
 )
 
 
+def _print_licenses_and_exit(
+    ctx: click.Context, _param: click.Parameter, value: bool
+) -> None:
+    """Print the bundled third-party NOTICES.txt (if present) and exit.
+
+    The cli-v2 spec (§4) requires a ``--licenses`` flag that prints all
+    third-party attributions and exits without starting the server. The
+    NOTICES.txt file is generated per release in Phase 8b; when the file
+    is absent (e.g. running from a source checkout outside a release
+    tarball), a fallback message is printed so the flag never crashes
+    the CLI.
+    """
+    if not value or ctx.resilient_parsing:
+        return
+    notices = Path(__file__).resolve().parent.parent / "NOTICES.txt"
+    if notices.exists():
+        click.echo(notices.read_text())
+    else:
+        click.echo(
+            "NOTICES.txt not bundled in this build — run from a release tarball "
+            "to see full third-party license attributions. The top-level NOTICE "
+            "file describes the upstream fork relationship."
+        )
+    ctx.exit(0)
+
+
 @click.group()
 @click.version_option(
     version=__version__,
@@ -77,6 +127,14 @@ logger.add(
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 🚀 Version: %(version)s
 """,
+)
+@click.option(
+    "--licenses",
+    is_flag=True,
+    callback=_print_licenses_and_exit,
+    expose_value=False,
+    is_eager=True,
+    help="Print bundled third-party license attributions and exit.",
 )
 def cli():
     """Top-level Click command group for the MLX server CLI.
@@ -97,9 +155,14 @@ def cli():
 )
 @click.option(
     "--model-path",
+    "--model",
+    "model_path",
     required=False,
     default=None,
-    help="Path to the model (required for lm, embeddings model types).",
+    help=(
+        "HuggingFace repo ID or local path to the model. "
+        "``--model`` is the cli-v2 spec name; ``--model-path`` is the legacy alias."
+    ),
 )
 @click.option(
     "--model-type",
@@ -120,9 +183,27 @@ def cli():
     help="Override the model name returned by /v1/models and accepted in request 'model' field. Defaults to model_path if not set.",
 )
 @click.option("--port", default=8000, type=int, help="Port to run the server on")
-@click.option("--host", default="0.0.0.0", help="Host to run the server on")
+@click.option(
+    "--host",
+    default="127.0.0.1",
+    show_default=True,
+    help=(
+        "Host to bind. Defaults to loopback per cli-v2 contract; "
+        "set to 0.0.0.0 to expose on all interfaces."
+    ),
+)
 @click.option("--queue-timeout", default=300, type=int, help="Request timeout in seconds")
 @click.option("--queue-size", default=100, type=int, help="Maximum queue size for pending requests")
+@click.option(
+    "--idle-unload-seconds",
+    default=0,
+    type=int,
+    help=(
+        "When > 0, run the model in on-demand mode: load on first request and "
+        "unload after this many seconds of inactivity. 0 (default) keeps the "
+        "model resident for the life of the process. cli-v2 contract."
+    ),
+)
 @click.option(
     "--disable-auto-resize",
     is_flag=True,
@@ -142,8 +223,11 @@ def cli():
 @click.option(
     "--log-level",
     default="INFO",
-    type=UpperChoice(["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]),
-    help="Set the logging level. Default is INFO.",
+    type=UpperChoice(list(_LOG_LEVEL_CHOICES)),
+    help=(
+        "Logging level. cli-v2 spec accepts info|debug|warn|error (any case); "
+        "warning and critical are also accepted for backward compatibility."
+    ),
 )
 @click.option(
     "--enable-auto-tool-choice",
@@ -235,12 +319,14 @@ def cli():
 # already know that tool can tune this one the same way.
 @click.option(
     "--decode-concurrency",
+    "--max-concurrency",
     "batch_completion_size",
     default=32,
     type=int,
     help=(
         "When a request is batchable, decode that many requests in parallel. "
-        "Applies to the 'lm' model type. Default is 32."
+        "``--max-concurrency`` is the cli-v2 spec name; ``--decode-concurrency`` "
+        "is the legacy alias. Applies to the 'lm' model type. Default is 32."
     ),
 )
 @click.option(
@@ -326,6 +412,7 @@ def launch(
     host,
     queue_timeout,
     queue_size,
+    idle_unload_seconds,
     disable_auto_resize,
     log_file,
     no_log_file,
@@ -383,7 +470,8 @@ def launch(
     # ---- Single-handler mode (original behavior) ----
     if model_path is None:
         raise click.UsageError(
-            "Either --config (multi-handler YAML) or --model-path (single model) is required."
+            "Either --config (multi-handler YAML) or --model / --model-path "
+            "(single model) is required."
         )
 
     args = MLXServerConfig(
@@ -395,10 +483,13 @@ def launch(
         host=host,
         queue_timeout=queue_timeout,
         queue_size=queue_size,
+        # cli-v2 --idle-unload-seconds: > 0 flips on-demand load/unload.
+        on_demand=idle_unload_seconds > 0,
+        on_demand_idle_timeout=idle_unload_seconds or 60,
         disable_auto_resize=disable_auto_resize,
         log_file=log_file,
         no_log_file=no_log_file,
-        log_level=log_level,
+        log_level=_resolve_log_level(log_level),
         enable_auto_tool_choice=enable_auto_tool_choice,
         tool_call_parser=tool_call_parser,
         reasoning_parser=reasoning_parser,

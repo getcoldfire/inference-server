@@ -81,6 +81,13 @@ class MLXServerConfig:
     default_seed: int | None = None
     default_repetition_context_size: int | None = None
 
+    # On-demand model unloading (cli-v2 contract: --idle-unload-seconds).
+    # When > 0 the model is loaded on first request and unloaded after
+    # ``on_demand_idle_timeout`` seconds of inactivity. The default 0
+    # keeps the legacy behavior (model stays resident).
+    on_demand: bool = False
+    on_demand_idle_timeout: int = 60
+
     def __post_init__(self) -> None:
         """Normalize certain CLI fields after instantiation."""
 
@@ -128,6 +135,8 @@ class MLXServerConfig:
             context_length=self.context_length,
             queue_timeout=self.queue_timeout,
             queue_size=self.queue_size,
+            on_demand=self.on_demand,
+            on_demand_idle_timeout=self.on_demand_idle_timeout,
             disable_auto_resize=self.disable_auto_resize,
             enable_auto_tool_choice=self.enable_auto_tool_choice,
             tool_call_parser=self.tool_call_parser,

@@ -396,12 +396,21 @@ def main():
     subcommand when a subcommand is omitted for backwards compatibility,
     and delegates execution to :func:`app.cli.cli` through
     ``cli.main``.
+
+    Top-level flags exposed on the ``cli`` group itself (``--version``,
+    ``--help``, ``--licenses``) are passed through unmodified so that
+    ``python -m app.main --licenses`` prints attributions and exits
+    instead of being silently rewritten to a ``launch`` invocation.
     """
     from .cli import cli
 
+    # Top-level group flags must not be rewritten into a ``launch`` invocation.
+    _GROUP_FLAGS = {"--version", "--help", "-h", "--licenses"}
     args = [str(x) for x in sys.argv[1:]]
     # Keep backwards compatibility: Add 'launch' subcommand if none is provided
-    if not args or args[0].startswith("-"):
+    if not args:
+        args.insert(0, "launch")
+    elif args[0].startswith("-") and args[0] not in _GROUP_FLAGS:
         args.insert(0, "launch")
     cli.main(args=args)
 
