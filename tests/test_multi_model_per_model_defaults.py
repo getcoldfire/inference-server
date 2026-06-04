@@ -625,7 +625,7 @@ async def test_responses_omitted_model_does_not_fallback_to_non_text_handler() -
 
     endpoints_module = _load_endpoints_module()
 
-    fallback_handler = types.SimpleNamespace(handler_type="whisper")
+    fallback_handler = types.SimpleNamespace(handler_type="image")
     registry_handler = types.SimpleNamespace(
         handler_type="lm", _uses_model_sampling_defaults=True, **PER_MODEL_DEFAULTS_A
     )
@@ -658,7 +658,7 @@ async def test_responses_omitted_model_non_text_fallback_uses_on_demand_default_
         captured_handlers.append(handler)
         return JSONResponse(content={"ok": True})
 
-    fallback_handler = types.SimpleNamespace(handler_type="whisper")
+    fallback_handler = types.SimpleNamespace(handler_type="image")
     on_demand_text_handler = types.SimpleNamespace(
         handler_type="lm",
         served_model_name=Config.TEXT_MODEL,

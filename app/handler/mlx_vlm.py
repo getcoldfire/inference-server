@@ -8,7 +8,7 @@ from typing import Any
 from fastapi import HTTPException
 from loguru import logger
 
-from ..core import AudioProcessor, ImageProcessor, InferenceWorker, VideoProcessor
+from ..core import ImageProcessor, InferenceWorker, VideoProcessor
 from ..core.vlm_batch_scheduler import VLM_BATCHING_AVAILABLE, VLMBatchScheduler
 from ..message_converters import MessageConverterManager
 from ..models.mlx_vlm import MLX_VLM
@@ -91,7 +91,6 @@ class MLXVLMHandler:
             chat_template_file=chat_template_file,
         )
         self.image_processor = ImageProcessor(max_workers)
-        self.audio_processor = AudioProcessor(max_workers)
         self.video_processor = VideoProcessor(max_workers)
         self.disable_auto_resize = disable_auto_resize
         self.model_created = int(time.time())  # Store creation time when model is loaded

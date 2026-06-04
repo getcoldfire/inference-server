@@ -456,7 +456,7 @@ class HandlerProcessProxy:
         Unique model identifier in the registry.
     handler_type : str
         Handler type string (``"lm"``, ``"multimodal"``, ``"embeddings"``,
-        ``"image"``, ``"whisper"``).
+        ``"image"``).
     model_created : int
         Unix timestamp when the handler process was started.
     """
@@ -468,7 +468,6 @@ class HandlerProcessProxy:
         "embeddings": "embeddings",
         "image-generation": "image",
         "image-edit": "image",
-        "whisper": "whisper",
     }
     _SAMPLING_DEFAULT_FIELDS: tuple[str, ...] = (
         "default_max_tokens",
@@ -1223,86 +1222,6 @@ class HandlerProcessProxy:
                         os.unlink(path)
                 except OSError:
                     pass
-
-    # -- Whisper handler methods --
-
-    async def prepare_transcription_request(self, request: Any) -> dict[str, Any]:
-        """Pre-process a transcription request by saving the uploaded file.
-
-        Since ``UploadFile`` objects are not picklable, file I/O is
-        performed in the main process and the resulting dict (with a
-        filesystem path) is returned for subsequent calls.
-
-        Parameters
-        ----------
-        request : TranscriptionRequest
-            The transcription request containing an uploaded audio file.
-
-        Returns
-        -------
-        dict[str, Any]
-            Pre-processed request data with ``audio_path`` instead of
-            a file object.
-        """
-        file = request.file
-        audio_path = await self._save_upload_file(file, suffix=".wav")
-
-        request_data: dict[str, Any] = {
-            "audio_path": audio_path,
-            "verbose": False,
-        }
-        if request.temperature is not None:
-            request_data["temperature"] = request.temperature
-        if request.language is not None:
-            request_data["language"] = request.language
-        if request.prompt is not None:
-            request_data["initial_prompt"] = request.prompt
-
-        return request_data
-
-    async def generate_transcription_response(self, request: Any) -> Any:
-        """Forward a transcription request to the subprocess.
-
-        The uploaded file is saved locally first, then the
-        pre-processed data is sent to the child process for inference.
-
-        Parameters
-        ----------
-        request : TranscriptionRequest
-            The transcription request.
-
-        Returns
-        -------
-        TranscriptionResponse
-            The transcription result.
-        """
-        request_data = await self.prepare_transcription_request(request)
-        return await self._call("transcribe_from_data", request_data)
-
-    async def generate_transcription_stream_from_data(
-        self, request_data: dict[str, Any], *args: Any, **kwargs: Any
-    ) -> AsyncGenerator[str, None]:
-        """Forward a streaming transcription request to the subprocess.
-
-        Parameters
-        ----------
-        request_data : dict[str, Any]
-            Pre-processed transcription request data (from
-            ``prepare_transcription_request``).
-        *args : Any
-            Additional positional arguments forwarded to the handler.
-        **kwargs : Any
-            Additional keyword arguments forwarded to the handler.
-
-        Yields
-        ------
-        str
-            SSE-formatted transcription chunks.
-        """
-        async for chunk in self._call_stream(
-            "transcribe_stream_from_data", request_data, *args, **kwargs
-        ):
-            yield chunk
 
     # -- Cleanup --
 

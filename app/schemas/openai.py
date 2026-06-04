@@ -55,7 +55,6 @@ class Config:
     EMBEDDING_MODEL = "local-embedding-model"  # Model used for generating embeddings
     IMAGE_GENERATION_MODEL = "local-image-generation-model"
     IMAGE_EDIT_MODEL = "local-image-edit-model"
-    TRANSCRIPTION_MODEL = "local-transcription-model"
 
 
 class HealthCheckStatus(StrEnum):
@@ -481,13 +480,6 @@ class ImageResponseFormat(StrEnum):
     B64_JSON = "b64_json"
 
 
-class TranscriptionResponseFormat(StrEnum):
-    """Audio response format."""
-
-    JSON = "json"
-    TEXT = "text"
-
-
 class ImageGenerationRequest(OpenAIBaseModel):
     """Request schema for OpenAI-compatible image generation API."""
 
@@ -577,79 +569,6 @@ class ImageEditResponse(OpenAIBaseModel):
         ..., description="The Unix timestamp (in seconds) when the image was edited"
     )
     data: list[ImageData] = Field(..., description="List of edited images")
-
-
-class TranscriptionRequest(OpenAIBaseModel):
-    """Request schema for OpenAI-compatible transcription API."""
-
-    file: UploadFile = Field(..., description="The audio file to transcribe")
-    model: str | None = Field(
-        default=Config.TRANSCRIPTION_MODEL, description="The model to use for transcription"
-    )
-    language: str | None = Field(None, description="The language of the audio file")
-    prompt: str | None = Field(None, description="The prompt for the transcription")
-    response_format: TranscriptionResponseFormat | None = Field(
-        default=TranscriptionResponseFormat.JSON,
-        description="The format in which the transcription is returned",
-    )
-    stream: bool | None = Field(default=False, description="Whether to stream the transcription")
-    temperature: float | None = Field(
-        default=0.0, description="The temperature for the transcription"
-    )
-    top_p: float | None = Field(default=None, description="The top-p for the transcription")
-    top_k: int | None = Field(default=None, description="The top-k for the transcription")
-    min_p: float | None = Field(default=None, description="The min-p for the transcription")
-    seed: int | None = Field(default=None, description="The seed for the transcription")
-    frequency_penalty: float | None = Field(
-        default=None, description="The frequency penalty for the transcription"
-    )
-    repetition_penalty: float | None = Field(
-        default=None, description="The repetition penalty for the transcription"
-    )
-    presence_penalty: float | None = Field(
-        default=None, description="Presence penalty for token generation"
-    )
-    reasoning_effort: Literal["low", "medium", "high"] | None = None
-
-
-# Transcription response objects
-class TranscriptionUsageAudio(OpenAIBaseModel):
-    """Represents audio usage information for transcription."""
-
-    type: Literal["duration"] = Field(..., description="The type of usage, always 'duration'")
-    seconds: int = Field(..., description="The duration of the audio in seconds")
-
-
-class TranscriptionResponse(OpenAIBaseModel):
-    """Represents a transcription response."""
-
-    text: str = Field(..., description="The transcribed text.")
-    usage: TranscriptionUsageAudio = Field(..., description="The usage of the transcription.")
-
-
-class TranscriptionResponseStreamChoice(OpenAIBaseModel):
-    """Represents a choice in a streaming transcription response."""
-
-    delta: Delta = Field(..., description="The delta for this streaming choice.")
-    finish_reason: str | None = None
-    stop_reason: int | str | None = None
-
-
-class TranscriptionResponseStream(OpenAIBaseModel):
-    """Represents a streaming transcription response."""
-
-    id: str = Field(..., description="The ID of the transcription.")
-    object: Literal["transcription.chunk"] = Field(
-        ..., description="The object type, always 'transcription.chunk'."
-    )
-    created: int = Field(..., description="The creation timestamp of the chunk.")
-    model: str = Field(..., description="The model used for the transcription.")
-    choices: list[TranscriptionResponseStreamChoice] = Field(
-        ..., description="The choices for this streaming response."
-    )
-    usage: TranscriptionUsageAudio | None = Field(
-        default=None, description="The usage of the transcription."
-    )
 
 
 # --- Responses API Schemas ---

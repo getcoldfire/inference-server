@@ -139,7 +139,7 @@ def create_lifespan(config_args: MLXServerConfig):
 
     - Determine the model identifier from the provided ``config_args``
     - Instantiate the appropriate MLX handler based on ``model_type``
-      (multimodal, image-generation, image-edit, embeddings, whisper, or
+      (multimodal, image-generation, image-edit, embeddings, or
       text LM)
     - Initialize the handler (including queuing and concurrency setup)
     - Perform an initial memory cleanup
@@ -309,16 +309,6 @@ def create_handler_from_config(model_cfg: ModelEntryConfig) -> Any:
 
         return _attach_sampling_defaults(
             MLXEmbeddingsHandler(
-                model_path=model_path,
-            ),
-            model_cfg,
-        )
-
-    if model_cfg.model_type == "whisper":
-        from .handler.mlx_whisper import MLXWhisperHandler
-
-        return _attach_sampling_defaults(
-            MLXWhisperHandler(
                 model_path=model_path,
             ),
             model_cfg,

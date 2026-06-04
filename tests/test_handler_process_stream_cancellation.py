@@ -41,9 +41,9 @@ async def test_call_stream_does_not_enqueue_cancel_after_normal_completion(
     """Successful streams should not enqueue a late cancel control message."""
 
     model_cfg = ModelEntryConfig(
-        model_path="dummy-whisper-model",
-        model_type="whisper",
-        served_model_name="dummy-whisper-model",
+        model_path="dummy-model",
+        model_type="lm",
+        served_model_name="dummy-model",
     )
     proxy = HandlerProcessProxy(
         model_cfg_dict=model_cfg.__dict__.copy(),
@@ -80,9 +80,9 @@ async def test_call_stream_does_not_enqueue_cancel_after_terminal_error(
     """Terminal stream errors should not enqueue a late cancel control message."""
 
     model_cfg = ModelEntryConfig(
-        model_path="dummy-whisper-model",
-        model_type="whisper",
-        served_model_name="dummy-whisper-model",
+        model_path="dummy-model",
+        model_type="lm",
+        served_model_name="dummy-model",
     )
     proxy = HandlerProcessProxy(
         model_cfg_dict=model_cfg.__dict__.copy(),
@@ -129,9 +129,9 @@ async def test_call_stream_enqueues_cancel_once_after_early_disconnect(
     """Closing a live stream early should forward exactly one cancel signal."""
 
     model_cfg = ModelEntryConfig(
-        model_path="dummy-whisper-model",
-        model_type="whisper",
-        served_model_name="dummy-whisper-model",
+        model_path="dummy-model",
+        model_type="lm",
+        served_model_name="dummy-model",
     )
     proxy = HandlerProcessProxy(
         model_cfg_dict=model_cfg.__dict__.copy(),

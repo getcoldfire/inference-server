@@ -5,7 +5,6 @@ from __future__ import annotations
 from typing import Any
 
 __all__ = [
-    "AudioProcessor",
     "BaseProcessor",
     "BatchChunk",
     "BatchScheduler",
@@ -19,10 +18,6 @@ __all__ = [
 
 def __getattr__(name: str) -> Any:
     """Lazily import core helpers so one backend does not initialize all stacks."""
-    if name == "AudioProcessor":
-        from .audio_processor import AudioProcessor
-
-        return AudioProcessor
     if name == "BaseProcessor":
         from .base_processor import BaseProcessor
 

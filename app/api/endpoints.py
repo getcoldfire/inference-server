@@ -52,8 +52,6 @@ from ..schemas.openai import (
     ResponsesResponse,
     ResponseUsage,
     StreamingChoice,
-    TranscriptionRequest,
-    TranscriptionResponse,
     UsageInfo,
     random_uuid,
 )
@@ -757,52 +755,6 @@ async def create_image_edit(
             )
         else:
             return image_response
-    finally:
-        await _release_on_demand(raw_request)
-
-
-@router.post("/v1/audio/transcriptions", response_model=None)
-async def create_audio_transcriptions(
-    request: Annotated[TranscriptionRequest, Form()], raw_request: Request
-) -> StreamingResponse | TranscriptionResponse | JSONResponse | str:
-    """Handle audio transcription requests."""
-    handler = await _resolve_handler(raw_request, model_id=request.model)
-    if handler is None:
-        return JSONResponse(
-            content=create_error_response(
-                "Model handler not initialized",
-                "service_unavailable",
-                HTTPStatus.SERVICE_UNAVAILABLE,
-            ),
-            status_code=HTTPStatus.SERVICE_UNAVAILABLE,
-        )
-
-    try:
-        _normalize_request_model(raw_request, request, handler)
-        if request.stream:
-            # procoess the request before sending to the handler
-            request_data = await handler.prepare_transcription_request(request)
-            return StreamingResponse(
-                handler.generate_transcription_stream_from_data(request_data),
-                media_type="text/event-stream",
-                headers={
-                    "Cache-Control": "no-cache",
-                    "Connection": "keep-alive",
-                    "X-Accel-Buffering": "no",
-                },
-            )
-        transcription_response: (
-            TranscriptionResponse | str
-        ) = await handler.generate_transcription_response(request)
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.exception(f"Error processing transcription request: {type(e).__name__}: {e}")
-        return JSONResponse(
-            content=create_error_response(str(e)), status_code=HTTPStatus.INTERNAL_SERVER_ERROR
-        )
-    else:
-        return transcription_response
     finally:
         await _release_on_demand(raw_request)
 
