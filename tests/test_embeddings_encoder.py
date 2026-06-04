@@ -60,27 +60,46 @@ def test_nomic_style_forward_returns_correct_shape(nomic_model):
 
 
 def test_nomic_uses_rope_not_absolute_position(nomic_model):
-    """Position-shifted inputs must produce *different* outputs under RoPE.
+    """The SAME token at DIFFERENT absolute positions must yield different outputs.
 
-    Same token IDs at different absolute positions exercise RoPE: if our
-    implementation accidentally ignored positions (or applied position 0 to
-    everything), the two outputs would match. They must not.
+    To isolate position-sensitivity from token-identity we feed the same trailing
+    sequence `[7, 8]` once at positions 2-3 (after two padding tokens) and once
+    at positions 0-1 (no padding). Under correct RoPE, the trailing tokens see
+    different rotations and the resulting hidden states must differ. Under a
+    broken implementation that ignores position (or zeros it out), the trailing
+    outputs would match.
     """
     model, _ = nomic_model
-    a = mx.array([[1, 2, 3, 4]])
-    b = mx.array([[0, 1, 2, 3]])  # same trailing tokens, different positions
+    padded = mx.array([[0, 0, 7, 8]])
+    unpadded = mx.array([[7, 8, 0, 0]])
+    # Attend to ALL positions in both cases — we want pure position effect,
+    # not attention-mask differences.
     mask = mx.array([[1, 1, 1, 1]])
-    out_a = model(a, None, mask)
-    out_b = model(b, None, mask)
-    assert not mx.allclose(out_a, out_b, atol=1e-4).item()
+    out_padded = model(padded, None, mask)
+    out_unpadded = model(unpadded, None, mask)
+    # Compare ONLY the trailing-token outputs: positions 2-3 in `padded` vs
+    # positions 0-1 in `unpadded`. Same tokens, different absolute positions.
+    trail_padded = out_padded[:, 2:4, :]
+    trail_unpadded = out_unpadded[:, 0:2, :]
+    assert not mx.allclose(trail_padded, trail_unpadded, atol=1e-4).item()
 
 
-def test_vanilla_bert_is_deterministic(bert_model):
-    """Identical input and identical positions yields bitwise-equal output."""
+def test_vanilla_bert_position_sensitive(bert_model):
+    """Absolute-position BERT must yield different outputs when same tokens
+    appear at different positions.
+
+    Mirrors the RoPE position-sensitivity test for the absolute-embedding
+    code path: shifts the same `[7, 8]` pair between leading and trailing
+    positions and verifies the per-token outputs differ. A bug that skipped
+    the position-embedding addition would make these match.
+    """
     model, _ = bert_model
-    a = mx.array([[5, 5, 5, 5]])
+    padded = mx.array([[0, 0, 7, 8]])
+    unpadded = mx.array([[7, 8, 0, 0]])
     mask = mx.array([[1, 1, 1, 1]])
-    ttids = mx.zeros_like(a)
-    out_a = model(a, ttids, mask)
-    out_b = model(a, ttids, mask)
-    assert mx.allclose(out_a, out_b, atol=1e-6).item()
+    ttids = mx.zeros_like(padded)
+    out_padded = model(padded, ttids, mask)
+    out_unpadded = model(unpadded, ttids, mask)
+    trail_padded = out_padded[:, 2:4, :]
+    trail_unpadded = out_unpadded[:, 0:2, :]
+    assert not mx.allclose(trail_padded, trail_unpadded, atol=1e-4).item()

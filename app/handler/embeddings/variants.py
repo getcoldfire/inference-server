@@ -1,23 +1,24 @@
-"""Position embedding and MLP variants for BERT-family encoders.
+"""Position embedding primitives for BERT-family encoders.
 
 Implements:
 
 - `rope_frequencies(seq_len, head_dim, base)` — precompute RoPE cos/sin tables.
 - `rotary_apply(x, cos, sin)` — apply RoPE rotation to Q/K tensors of shape
   `(batch, n_heads, seq, head_dim)`.
-- `SwiGLUMLP` — gated SwiGLU MLP block used by nomic-bert and similar
-  modern encoders.
 
-These are referenced by `app.handler.embeddings.encoder.BertModel` when
-the model config requests `position_embedding_type="rotary"` or
-`hidden_act="swiglu"`.
+Referenced by `app.handler.embeddings.encoder.BertSelfAttention` when the
+model config requests `position_embedding_type="rotary"`. The SwiGLU MLP
+itself is implemented inline as `BertSwiGLUBlock` in `encoder.py` so that
+its parameter names match the HuggingFace nomic-bert layout exactly
+(`mlp.gate.weight`, `mlp.up.weight`, etc.) — wrapping it in a separate
+`SwiGLUMLP` here would force an extra `.mlp.mlp.*` prefix that breaks the
+safetensors key mapping.
 """
 from __future__ import annotations
 
 from typing import Tuple
 
 import mlx.core as mx
-import mlx.nn as nn
 
 
 def rope_frequencies(
@@ -75,20 +76,3 @@ def rotary_apply(x: mx.array, cos: mx.array, sin: mx.array) -> mx.array:
     # to (..., head_dim) interleaved as even,odd,even,odd,...
     stacked = mx.stack([rot_even, rot_odd], axis=-1)
     return stacked.reshape(x.shape)
-
-
-class SwiGLUMLP(nn.Module):
-    """SwiGLU MLP variant used by nomic-bert and many modern transformers.
-
-    Forward: `down(silu(gate(x)) * up(x))`. No biases on the linear layers
-    (mirrors the convention used by `nomic-embed-text-v1.5`).
-    """
-
-    def __init__(self, hidden_size: int, intermediate_size: int):
-        super().__init__()
-        self.gate = nn.Linear(hidden_size, intermediate_size, bias=False)
-        self.up = nn.Linear(hidden_size, intermediate_size, bias=False)
-        self.down = nn.Linear(intermediate_size, hidden_size, bias=False)
-
-    def __call__(self, x: mx.array) -> mx.array:
-        return self.down(nn.silu(self.gate(x)) * self.up(x))

@@ -42,7 +42,6 @@ import mlx.core as mx
 import mlx.nn as nn
 
 from app.handler.embeddings.variants import (
-    SwiGLUMLP,
     rope_frequencies,
     rotary_apply,
 )
