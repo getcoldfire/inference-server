@@ -9,9 +9,9 @@ import json
 import os
 import random
 import time
-from typing import TYPE_CHECKING, Annotated, Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
-from fastapi import APIRouter, Form, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 from loguru import logger
 import numpy as np
@@ -38,10 +38,6 @@ from ..schemas.openai import (
     FunctionCall,
     HealthCheckResponse,
     HealthCheckStatus,
-    ImageEditRequest,
-    ImageEditResponse,
-    ImageGenerationRequest,
-    ImageGenerationResponse,
     ImageURL,
     InputTokensDetails,
     Message,
@@ -79,8 +75,8 @@ def _get_handler_type(handler: Any) -> str:
     Returns
     -------
     str
-        Handler type string (``"lm"``, ``"multimodal"``, ``"embeddings"``,
-        ``"image"``, ``"whisper"``), or ``""`` if not determinable.
+        Handler type string (``"lm"``, ``"multimodal"``, ``"embeddings"``),
+        or ``""`` if not determinable.
     """
     return getattr(handler, "handler_type", "")
 
@@ -424,7 +420,7 @@ async def queue_stats(raw_request: Request) -> dict[str, Any] | JSONResponse:
     """
     Get queue statistics.
 
-    Note: queue_stats shape is handler-dependent (Flux vs LM/VLM/Whisper)
+    Note: queue_stats shape is handler-dependent (LM/VLM/embeddings)
     so callers know keys may vary.
     """
     handler = getattr(raw_request.app.state, "handler", None)
@@ -666,95 +662,6 @@ async def embeddings(
             return JSONResponse(
                 content=create_error_response(str(e)), status_code=HTTPStatus.INTERNAL_SERVER_ERROR
             )
-    finally:
-        await _release_on_demand(raw_request)
-
-
-@router.post("/v1/images/generations", response_model=None)
-async def image_generations(
-    request: ImageGenerationRequest, raw_request: Request
-) -> ImageGenerationResponse | JSONResponse:
-    """Handle image generation requests."""
-    handler = await _resolve_handler(raw_request, model_id=request.model)
-    if handler is None:
-        return JSONResponse(
-            content=create_error_response(
-                "Model handler not initialized",
-                "service_unavailable",
-                HTTPStatus.SERVICE_UNAVAILABLE,
-            ),
-            status_code=HTTPStatus.SERVICE_UNAVAILABLE,
-        )
-
-    try:
-        _normalize_request_model(raw_request, request, handler)
-        # Check if the handler supports image generation
-        if _get_handler_type(handler) != "image":
-            return JSONResponse(
-                content=create_error_response(
-                    "Image generation requests require an image generation model. "
-                    f"Handler for '{request.model}' is {type(handler).__name__}.",
-                    "unsupported_request",
-                    HTTPStatus.BAD_REQUEST,
-                ),
-                status_code=HTTPStatus.BAD_REQUEST,
-            )
-
-        try:
-            image_response: ImageGenerationResponse = await handler.generate_image(request)
-        except HTTPException:
-            raise
-        except Exception as e:
-            logger.exception(f"Error processing image generation request: {type(e).__name__}: {e}")
-            return JSONResponse(
-                content=create_error_response(str(e)), status_code=HTTPStatus.INTERNAL_SERVER_ERROR
-            )
-        else:
-            return image_response
-    finally:
-        await _release_on_demand(raw_request)
-
-
-@router.post("/v1/images/edits", response_model=None)
-async def create_image_edit(
-    request: Annotated[ImageEditRequest, Form()], raw_request: Request
-) -> ImageEditResponse | JSONResponse:
-    """Handle image editing requests with dynamic provider routing."""
-    handler = await _resolve_handler(raw_request, model_id=request.model)
-    if handler is None:
-        return JSONResponse(
-            content=create_error_response(
-                "Model handler not initialized",
-                "service_unavailable",
-                HTTPStatus.SERVICE_UNAVAILABLE,
-            ),
-            status_code=HTTPStatus.SERVICE_UNAVAILABLE,
-        )
-
-    try:
-        _normalize_request_model(raw_request, request, handler)
-        # Check if the handler supports image editing
-        if _get_handler_type(handler) != "image":
-            return JSONResponse(
-                content=create_error_response(
-                    "Image editing requests require an image editing model. "
-                    f"Handler for '{request.model}' is {type(handler).__name__}.",
-                    "unsupported_request",
-                    HTTPStatus.BAD_REQUEST,
-                ),
-                status_code=HTTPStatus.BAD_REQUEST,
-            )
-        try:
-            image_response: ImageEditResponse = await handler.edit_image(request)
-        except HTTPException:
-            raise
-        except Exception as e:
-            logger.exception(f"Error processing image edit request: {type(e).__name__}: {e}")
-            return JSONResponse(
-                content=create_error_response(str(e)), status_code=HTTPStatus.INTERNAL_SERVER_ERROR
-            )
-        else:
-            return image_response
     finally:
         await _release_on_demand(raw_request)
 

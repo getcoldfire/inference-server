@@ -19,7 +19,6 @@ def _load_cli_module(monkeypatch: pytest.MonkeyPatch) -> Any:
     """Import ``app.cli`` with a lightweight ``app.main`` stub."""
 
     fake_main = types.ModuleType("app.main")
-    fake_mflux = types.ModuleType("app.models.mflux")
 
     async def _placeholder_start(_config: Any) -> None:
         return None
@@ -29,9 +28,7 @@ def _load_cli_module(monkeypatch: pytest.MonkeyPatch) -> Any:
 
     fake_main.start = _placeholder_start
     fake_main.start_multi = _placeholder_start_multi
-    fake_mflux.IMAGE_CONFIG_NAMES = ()
     monkeypatch.setitem(sys.modules, "app.main", fake_main)
-    monkeypatch.setitem(sys.modules, "app.models.mflux", fake_mflux)
     monkeypatch.delitem(sys.modules, "app.cli", raising=False)
     cli_module = importlib.import_module("app.cli")
     return importlib.reload(cli_module)

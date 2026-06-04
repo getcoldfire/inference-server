@@ -19,7 +19,6 @@ from __future__ import annotations
 
 from contextlib import asynccontextmanager
 import gc
-import importlib.util
 import sys
 import time
 from typing import Any
@@ -35,22 +34,6 @@ from .config import MLXServerConfig, ModelEntryConfig, MultiModelServerConfig
 from .core.handler_process import HandlerProcessProxy
 from .core.model_registry import ModelRegistry
 from .version import __version__
-
-MFLUX_INSTALL_HINT = (
-    "Image generation and editing require the `mflux` package. "
-    "Install it with `pip install mflux==0.17.0`."
-)
-
-
-def ensure_image_handler_available(model_type: str) -> None:
-    """Validate that optional image generation support is installed."""
-    if model_type not in {"image-generation", "image-edit"}:
-        return
-
-    if importlib.util.find_spec("mflux") is not None:
-        return
-
-    raise RuntimeError(MFLUX_INSTALL_HINT)
 
 
 _SAMPLING_DEFAULT_FIELDS: tuple[str, ...] = (
@@ -139,8 +122,7 @@ def create_lifespan(config_args: MLXServerConfig):
 
     - Determine the model identifier from the provided ``config_args``
     - Instantiate the appropriate MLX handler based on ``model_type``
-      (multimodal, image-generation, image-edit, embeddings, or
-      text LM)
+      (multimodal, embeddings, or text LM)
     - Initialize the handler (including queuing and concurrency setup)
     - Perform an initial memory cleanup
 
@@ -173,7 +155,6 @@ def create_lifespan(config_args: MLXServerConfig):
         """
         try:
             model_cfg = config_args.to_model_entry_config()
-            ensure_image_handler_available(model_cfg.model_type)
 
             logger.info(f"Initializing MLX handler with model path: {model_cfg.model_path}")
 
@@ -270,36 +251,6 @@ def create_handler_from_config(model_cfg: ModelEntryConfig) -> Any:
                 batch_prefill_size=model_cfg.batch_prefill_size,
                 batch_prefill_step_size=model_cfg.batch_prefill_step_size,
                 disable_batching=model_cfg.disable_batching,
-            ),
-            model_cfg,
-        )
-
-    if model_cfg.model_type == "image-generation":
-        ensure_image_handler_available(model_cfg.model_type)
-        from .handler.mflux import MLXFluxHandler
-
-        return _attach_sampling_defaults(
-            MLXFluxHandler(
-                model_path=model_path,
-                quantize=model_cfg.quantize,
-                config_name=model_cfg.config_name,
-                lora_paths=model_cfg.lora_paths,
-                lora_scales=model_cfg.lora_scales,
-            ),
-            model_cfg,
-        )
-
-    if model_cfg.model_type == "image-edit":
-        ensure_image_handler_available(model_cfg.model_type)
-        from .handler.mflux import MLXFluxHandler
-
-        return _attach_sampling_defaults(
-            MLXFluxHandler(
-                model_path=model_path,
-                quantize=model_cfg.quantize,
-                config_name=model_cfg.config_name,
-                lora_paths=model_cfg.lora_paths,
-                lora_scales=model_cfg.lora_scales,
             ),
             model_cfg,
         )

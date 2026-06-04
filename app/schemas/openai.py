@@ -7,7 +7,6 @@ import time
 from typing import Any, ClassVar, Literal, TypeAlias
 import uuid
 
-from fastapi import UploadFile
 from loguru import logger
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -53,8 +52,6 @@ class Config:
     TEXT_MODEL = "local-text-model"  # Default model for text-based chat completions
     MULTIMODAL_MODEL = "local-multimodal-model"  # Model used for multimodal requests
     EMBEDDING_MODEL = "local-embedding-model"  # Model used for generating embeddings
-    IMAGE_GENERATION_MODEL = "local-image-generation-model"
-    IMAGE_EDIT_MODEL = "local-image-edit-model"
 
 
 class HealthCheckStatus(StrEnum):
@@ -447,128 +444,6 @@ class ModelsResponse(OpenAIBaseModel):
 
     object: str = Field("list", description="The object type, always 'list'.")
     data: list[Model] = Field(..., description="List of models.")
-
-
-class ImageSize(StrEnum):
-    """Available image sizes."""
-
-    SMALL = "256x256"
-    MEDIUM = "512x512"
-    LARGE = "1024x1024"
-
-
-class Priority(StrEnum):
-    """Task priority levels."""
-
-    LOW = "low"
-    NORMAL = "normal"
-    HIGH = "high"
-
-
-class ImageEditQuality(StrEnum):
-    """Image edit quality levels."""
-
-    LOW = "low"
-    MEDIUM = "medium"
-    HIGH = "high"
-
-
-class ImageResponseFormat(StrEnum):
-    """Image edit response format."""
-
-    # Only support b64_json for now
-    B64_JSON = "b64_json"
-
-
-class ImageGenerationRequest(OpenAIBaseModel):
-    """Request schema for OpenAI-compatible image generation API."""
-
-    prompt: str = Field(..., description="A text description of the desired image(s).")
-    negative_prompt: str | None = Field(
-        None, description="A text description of the desired image(s)."
-    )
-    model: str | None = Field(
-        default=Config.IMAGE_GENERATION_MODEL, description="The model to use for image generation"
-    )
-    size: ImageSize | None = Field(
-        default=ImageSize.LARGE, description="The size of the generated images"
-    )
-    guidance_scale: float | None = Field(
-        default=3.5, description="The guidance scale for the image generation"
-    )
-    steps: int | None = Field(
-        default=4, ge=1, le=50, description="The number of inference steps (1-50)"
-    )
-    seed: int | None = Field(42, description="Seed for reproducible generation")
-    response_format: ImageResponseFormat | None = Field(
-        default=ImageResponseFormat.B64_JSON,
-        description="The format in which the generated images are returned",
-    )
-
-
-class ImageData(OpenAIBaseModel):
-    """Individual image data in the response."""
-
-    url: str | None = Field(
-        None, description="The URL of the generated image, if response_format is url"
-    )
-    b64_json: str | None = Field(
-        None,
-        description="The base64-encoded JSON of the generated image, if response_format is b64_json",
-    )
-
-
-class ImageGenerationResponse(OpenAIBaseModel):
-    """Response schema for OpenAI-compatible image generation API."""
-
-    created: int = Field(
-        ..., description="The Unix timestamp (in seconds) when the image was created"
-    )
-    data: list[ImageData] = Field(..., description="List of generated images")
-
-
-class ImageGenerationError(OpenAIBaseModel):
-    """Error response schema."""
-
-    code: str = Field(
-        ..., description="Error code (e.g., 'contentFilter', 'generation_error', 'queue_full')"
-    )
-    message: str = Field(..., description="Human-readable error message")
-    type: str | None = Field(None, description="Error type")
-
-
-class ImageEditRequest(OpenAIBaseModel):
-    """Request data for OpenAI-compatible image edit API."""
-
-    image: UploadFile | list[UploadFile] = Field(
-        ..., description="The image(s) to edit. Must be a file upload or a list of file uploads"
-    )
-    prompt: str = Field(..., description="The prompt for the image edit")
-    model: str | None = Field(
-        default=Config.IMAGE_EDIT_MODEL, description="The model to use for image edit"
-    )
-    negative_prompt: str | None = Field(None, description="The negative prompt for the image edit")
-    guidance_scale: float | None = Field(
-        default=2.5, description="The guidance scale for the image edit"
-    )
-    response_format: ImageResponseFormat | None = Field(
-        default=ImageResponseFormat.B64_JSON,
-        description="The format in which the edited image is returned",
-    )
-    seed: int | None = Field(default=42, description="The seed for the image edit")
-    size: ImageSize | None = Field(None, description="The size of the edited image")
-    steps: int | None = Field(
-        default=28, description="The number of inference steps for the image edit"
-    )
-
-
-class ImageEditResponse(OpenAIBaseModel):
-    """Response schema for OpenAI-compatible image edit API."""
-
-    created: int = Field(
-        ..., description="The Unix timestamp (in seconds) when the image was edited"
-    )
-    data: list[ImageData] = Field(..., description="List of edited images")
 
 
 # --- Responses API Schemas ---

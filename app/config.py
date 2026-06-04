@@ -13,7 +13,7 @@ these structures.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 
 from loguru import logger
@@ -40,10 +40,6 @@ class MLXServerConfig:
     queue_timeout: int = 300
     queue_size: int = 100
     disable_auto_resize: bool = False
-    quantize: int | None = None
-    config_name: str | None = None
-    lora_paths: list[str] | None = field(default=None, init=False)
-    lora_scales: list[float] | None = field(default=None, init=False)
     log_file: str | None = None
     no_log_file: bool = False
     log_level: str = "INFO"
@@ -85,55 +81,8 @@ class MLXServerConfig:
     default_seed: int | None = None
     default_repetition_context_size: int | None = None
 
-    # Used to capture raw CLI input before processing
-    lora_paths_str: str | None = None
-    lora_scales_str: str | None = None
-
     def __post_init__(self) -> None:
-        """Normalize certain CLI fields after instantiation.
-
-        - Convert comma-separated ``lora_paths`` and ``lora_scales`` into
-          lists when provided.
-        - Apply small model-type-specific defaults for ``config_name``
-          and emit warnings when values appear inconsistent.
-        """
-
-        # Process comma-separated LoRA paths and scales into lists (or None)
-        if self.lora_paths_str:
-            self.lora_paths = [p.strip() for p in self.lora_paths_str.split(",") if p.strip()]
-
-        if self.lora_scales_str:
-            try:
-                self.lora_scales = [
-                    float(s.strip()) for s in self.lora_scales_str.split(",") if s.strip()
-                ]
-            except ValueError:
-                # If parsing fails, log and set to None
-                logger.warning("Failed to parse lora_scales into floats; ignoring lora_scales")
-                self.lora_scales = None
-
-        # Validate that config name is only used with image-generation and
-        # image-edit model types. If missing for those types, set defaults.
-        if self.config_name and self.model_type not in ["image-generation", "image-edit"]:
-            logger.warning(
-                "Config name parameter '%s' provided but model type is '%s'. "
-                "Config name is only used with image-generation "
-                "and image-edit models.",
-                self.config_name,
-                self.model_type,
-            )
-        elif self.model_type == "image-generation" and not self.config_name:
-            logger.warning(
-                "Model type is 'image-generation' but no config name "
-                "specified. Using default 'flux-schnell'."
-            )
-            self.config_name = "flux-schnell"
-        elif self.model_type == "image-edit" and not self.config_name:
-            logger.warning(
-                "Model type is 'image-edit' but no config name "
-                "specified. Using default 'flux-kontext-dev'."
-            )
-            self.config_name = "flux-kontext-dev"
+        """Normalize certain CLI fields after instantiation."""
 
         # KV cache quantization is only supported for lm and multimodal model types
         if self.kv_bits is not None and self.model_type not in {"lm", "multimodal"}:
@@ -162,10 +111,7 @@ class MLXServerConfig:
 
     @property
     def model_identifier(self) -> str:
-        """Get the appropriate model identifier based on model type.
-
-        For Flux models, we always use model_path (local directory path).
-        """
+        """Get the appropriate model identifier (model_path)."""
         return self.model_path
 
     def to_model_entry_config(self) -> ModelEntryConfig:
@@ -182,10 +128,6 @@ class MLXServerConfig:
             context_length=self.context_length,
             queue_timeout=self.queue_timeout,
             queue_size=self.queue_size,
-            quantize=self.quantize,
-            config_name=self.config_name,
-            lora_paths=self.lora_paths,
-            lora_scales=self.lora_scales,
             disable_auto_resize=self.disable_auto_resize,
             enable_auto_tool_choice=self.enable_auto_tool_choice,
             tool_call_parser=self.tool_call_parser,
@@ -246,9 +188,7 @@ class MLXServerConfig:
 # Multi-model YAML configuration
 # ---------------------------------------------------------------------------
 
-VALID_MODEL_TYPES = frozenset(
-    {"lm", "multimodal", "image-generation", "image-edit", "embeddings"}
-)
+VALID_MODEL_TYPES = frozenset({"lm", "multimodal", "embeddings"})
 
 
 @dataclass
@@ -269,14 +209,6 @@ class ModelEntryConfig:
     context_length: int | None = None
     queue_timeout: int = 300
     queue_size: int = 100
-
-    # Image-generation / image-edit options
-    quantize: int | None = None
-    config_name: str | None = None
-
-    # LoRA options
-    lora_paths: list[str] | None = None
-    lora_scales: list[float] | None = None
 
     # On-demand (dynamic swapping) options
     on_demand: bool = False
@@ -326,20 +258,6 @@ class ModelEntryConfig:
                 f"Must be one of {sorted(VALID_MODEL_TYPES)}."
             )
             raise ValueError(msg)
-
-        # Apply image-generation / image-edit defaults (same as MLXServerConfig)
-        if self.model_type == "image-generation" and not self.config_name:
-            logger.warning(
-                "Model '%s' (image-generation) has no config_name. Defaulting to 'flux-schnell'.",
-                self.model_path,
-            )
-            self.config_name = "flux-schnell"
-        elif self.model_type == "image-edit" and not self.config_name:
-            logger.warning(
-                "Model '%s' (image-edit) has no config_name. Defaulting to 'flux-kontext-dev'.",
-                self.model_path,
-            )
-            self.config_name = "flux-kontext-dev"
 
         # KV cache quantization is LM/multimodal-only
         if self.kv_bits is not None and self.model_type not in {"lm", "multimodal"}:

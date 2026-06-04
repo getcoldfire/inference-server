@@ -37,7 +37,6 @@ from contextlib import suppress
 import multiprocessing as mp
 import os
 import queue
-import tempfile
 import threading
 import time
 import traceback
@@ -455,8 +454,7 @@ class HandlerProcessProxy:
     served_model_name : str
         Unique model identifier in the registry.
     handler_type : str
-        Handler type string (``"lm"``, ``"multimodal"``, ``"embeddings"``,
-        ``"image"``).
+        Handler type string (``"lm"``, ``"multimodal"``, ``"embeddings"``).
     model_created : int
         Unix timestamp when the handler process was started.
     """
@@ -466,8 +464,6 @@ class HandlerProcessProxy:
         "lm": "lm",
         "multimodal": "multimodal",
         "embeddings": "embeddings",
-        "image-generation": "image",
-        "image-edit": "image",
     }
     _SAMPLING_DEFAULT_FIELDS: tuple[str, ...] = (
         "default_max_tokens",
@@ -1013,37 +1009,6 @@ class HandlerProcessProxy:
         raise exc
 
     # ------------------------------------------------------------------
-    # File pre-processing helpers (for non-picklable UploadFile args)
-    # ------------------------------------------------------------------
-
-    @staticmethod
-    async def _save_upload_file(upload_file: Any, suffix: str = ".bin") -> str:
-        """Save an ``UploadFile`` to a temporary file and return the path.
-
-        Parameters
-        ----------
-        upload_file : UploadFile
-            FastAPI upload file object.
-        suffix : str
-            File extension for the temporary file.
-
-        Returns
-        -------
-        str
-            Filesystem path to the saved temporary file.
-        """
-        content = await upload_file.read()
-        filename = getattr(upload_file, "filename", None)
-        if filename:
-            ext = os.path.splitext(filename)[1]
-            if ext:
-                suffix = ext
-
-        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
-            tmp.write(content)
-            return tmp.name
-
-    # ------------------------------------------------------------------
     # Public handler interface (forwarded to child process)
     # ------------------------------------------------------------------
 
@@ -1158,70 +1123,6 @@ class HandlerProcessProxy:
             Embeddings result (list of lists of floats).
         """
         return await self._call("generate_embeddings_response", request)
-
-    # -- Image generation handler methods --
-
-    async def generate_image(self, request: Any) -> Any:
-        """Forward an image generation request to the subprocess.
-
-        Parameters
-        ----------
-        request : ImageGenerationRequest
-            The image generation request.
-
-        Returns
-        -------
-        ImageGenerationResponse
-            The generated image response.
-        """
-        return await self._call("generate_image", request)
-
-    async def edit_image(self, request: Any) -> Any:
-        """Forward an image editing request to the subprocess.
-
-        For ``ImageEditRequest`` objects that contain ``UploadFile``
-        fields (which are not picklable), this method pre-processes
-        the files in the main process and sends file paths to the
-        child process via the ``edit_image_from_paths`` handler method.
-
-        Parameters
-        ----------
-        request : ImageEditRequest
-            The image editing request.
-
-        Returns
-        -------
-        ImageEditResponse
-            The edited image response.
-        """
-        # ImageEditRequest.image contains UploadFile(s) — not picklable.
-        # Save files locally and forward paths to the subprocess.
-        images = request.image if isinstance(request.image, list) else [request.image]
-
-        temp_paths: list[str] = []
-        for img in images:
-            path = await self._save_upload_file(img, suffix=".png")
-            temp_paths.append(path)
-
-        edit_data = {
-            "image_paths": temp_paths,
-            "prompt": request.prompt,
-            "negative_prompt": getattr(request, "negative_prompt", None),
-            "steps": getattr(request, "steps", None),
-            "seed": getattr(request, "seed", None),
-            "guidance_scale": getattr(request, "guidance_scale", None),
-        }
-
-        try:
-            return await self._call("edit_image_from_paths", edit_data)
-        finally:
-            # Clean up temp files regardless of success/failure
-            for path in temp_paths:
-                try:
-                    if os.path.exists(path):
-                        os.unlink(path)
-                except OSError:
-                    pass
 
     # -- Cleanup --
 

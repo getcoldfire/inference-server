@@ -86,13 +86,6 @@ def print_startup_banner(config_args: MLXServerConfig) -> None:
     logger.info(f"🔌 Port: {config_args.port}")
     logger.info(f"⏱️ Queue Timeout: {config_args.queue_timeout} seconds")
     logger.info(f"📊 Queue Size: {config_args.queue_size}")
-    if config_args.model_type in ["image-generation", "image-edit"]:
-        logger.info(f"🔮 Quantize: {config_args.quantize}")
-        logger.info(f"🔮 Config Name: {config_args.config_name}")
-        if config_args.lora_paths:
-            logger.info(f"🔮 LoRA Paths: {config_args.lora_paths}")
-        if config_args.lora_scales:
-            logger.info(f"🔮 LoRA Scales: {config_args.lora_scales}")
     if (
         hasattr(config_args, "disable_auto_resize")
         and config_args.disable_auto_resize
@@ -187,14 +180,6 @@ def _model_entry_extras(m: ModelEntryConfig) -> list[tuple[str, object]]:
             batch_settings.append(f"prefill_step={m.batch_prefill_step_size}")
         if batch_settings:
             extras.append(("batch_scheduler", ", ".join(batch_settings)))
-    if m.quantize is not None:
-        extras.append(("quantize", m.quantize))
-    if m.config_name:
-        extras.append(("config_name", m.config_name))
-    if m.lora_paths:
-        extras.append(("lora_paths", m.lora_paths))
-    if m.lora_scales:
-        extras.append(("lora_scales", m.lora_scales))
     if m.disable_auto_resize:
         extras.append(("auto_resize", False))
     if m.on_demand:

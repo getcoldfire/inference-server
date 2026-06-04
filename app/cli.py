@@ -19,26 +19,6 @@ from .main import start_multi
 from .parsers import REASONING_PARSER_MAP, TOOL_PARSER_MAP, UNIFIED_PARSER_MAP
 from .version import __version__
 
-IMAGE_CONFIG_NAMES: tuple[str, ...] = (
-    "flux-schnell",
-    "flux-dev",
-    "flux-krea-dev",
-    "flux-kontext-dev",
-    "qwen-image",
-    "qwen-image-edit",
-    "fibo",
-    "z-image-turbo",
-    "flux2-klein-4b",
-    "flux2-klein-9b",
-    "flux2-klein-edit-4b",
-    "flux2-klein-edit-9b",
-)
-
-MFLUX_INSTALL_HINT = (
-    "Image generation and editing require the `mflux` package. "
-    "Install it with `pip install mflux==0.17.0`."
-)
-
 
 class UpperChoice(click.Choice):
     """Case-insensitive choice type that returns uppercase values.
@@ -74,37 +54,6 @@ class UpperChoice(click.Choice):
         raise click.BadParameter(
             f"invalid choice: {choice!r}. (choose from {', '.join(map(repr, self.choices))})"
         )
-
-
-def validate_image_config_name(
-    _ctx: click.Context, _param: click.Parameter, value: str | None
-) -> str | None:
-    """Validate image config names when optional mflux support is installed."""
-    if value is None or not IMAGE_CONFIG_NAMES:
-        return value
-
-    if value not in IMAGE_CONFIG_NAMES:
-        choices = ", ".join(sorted(IMAGE_CONFIG_NAMES))
-        raise click.BadParameter(f"invalid choice: {value!r}. (choose from {choices})")
-
-    return value
-
-
-def ensure_image_support_available(model_types: set[str]) -> None:
-    """Raise a usage error when image features are requested without mflux."""
-    if not any(model_type in {"image-generation", "image-edit"} for model_type in model_types):
-        return
-
-    try:
-        import mflux  # noqa: F401
-    except ImportError as exc:
-        detail = f" Optional import failed: {exc!s}"
-        raise click.UsageError(f"{MFLUX_INSTALL_HINT}{detail}") from exc
-    except RuntimeError as exc:
-        detail = f" Optional import failed: {exc!s}"
-        raise click.UsageError(f"{MFLUX_INSTALL_HINT}{detail}") from exc
-    else:
-        return
 
 
 # Configure basic logging for CLI (will be overridden by main.py)
@@ -150,15 +99,13 @@ def cli():
     "--model-path",
     required=False,
     default=None,
-    help="Path to the model (required for lm, multimodal, embeddings, image-generation, image-edit model types). With `image-generation` or `image-edit` model types, it should be the local path to the model.",
+    help="Path to the model (required for lm, multimodal, embeddings model types).",
 )
 @click.option(
     "--model-type",
     default="lm",
-    type=click.Choice(
-        ["lm", "multimodal", "image-generation", "image-edit", "embeddings"]
-    ),
-    help="Type of model to run (lm: text-only, multimodal: text+vision, image-generation: flux image generation, image-edit: flux image edit, embeddings: text embeddings)",
+    type=click.Choice(["lm", "multimodal", "embeddings"]),
+    help="Type of model to run (lm: text-only, multimodal: text+vision, embeddings: text embeddings)",
 )
 @click.option(
     "--context-length",
@@ -176,32 +123,6 @@ def cli():
 @click.option("--host", default="0.0.0.0", help="Host to run the server on")
 @click.option("--queue-timeout", default=300, type=int, help="Request timeout in seconds")
 @click.option("--queue-size", default=100, type=int, help="Maximum queue size for pending requests")
-@click.option(
-    "--quantize",
-    default=None,
-    type=int,
-    help="Quantization level for the model. Only used for image-generation and image-edit Flux models.",
-)
-@click.option(
-    "--config-name",
-    default=None,
-    type=str,
-    callback=validate_image_config_name,
-    metavar="CONFIG_NAME",
-    help="Config name of the model. Only used for image-generation and image-edit models.",
-)
-@click.option(
-    "--lora-paths",
-    default=None,
-    type=str,
-    help="Path to the LoRA file(s). Multiple paths should be separated by commas.",
-)
-@click.option(
-    "--lora-scales",
-    default=None,
-    type=str,
-    help="Scale factor for the LoRA file(s). Multiple scales should be separated by commas.",
-)
 @click.option(
     "--disable-auto-resize",
     is_flag=True,
@@ -405,10 +326,6 @@ def launch(
     host,
     queue_timeout,
     queue_size,
-    quantize,
-    config_name,
-    lora_paths,
-    lora_scales,
     disable_auto_resize,
     log_file,
     no_log_file,
@@ -460,7 +377,6 @@ def launch(
             multi_config = load_config_from_yaml(config_file)
         except (FileNotFoundError, ValueError) as e:
             raise click.BadParameter(str(e), param_hint="'--config'") from e
-        ensure_image_support_available({model.model_type for model in multi_config.models})
         asyncio.run(start_multi(multi_config))
         return
 
@@ -469,8 +385,6 @@ def launch(
         raise click.UsageError(
             "Either --config (multi-handler YAML) or --model-path (single model) is required."
         )
-
-    ensure_image_support_available({model_type})
 
     args = MLXServerConfig(
         model_path=model_path,
@@ -481,10 +395,6 @@ def launch(
         host=host,
         queue_timeout=queue_timeout,
         queue_size=queue_size,
-        quantize=quantize,
-        config_name=config_name,
-        lora_paths_str=lora_paths,
-        lora_scales_str=lora_scales,
         disable_auto_resize=disable_auto_resize,
         log_file=log_file,
         no_log_file=no_log_file,
