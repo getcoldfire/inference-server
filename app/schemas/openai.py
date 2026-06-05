@@ -50,7 +50,6 @@ class Config:
     """Configuration class holding the default model names for different types of requests."""
 
     TEXT_MODEL = "local-text-model"  # Default model for text-based chat completions
-    MULTIMODAL_MODEL = "local-multimodal-model"  # Model used for multimodal requests
     EMBEDDING_MODEL = "local-embedding-model"  # Model used for generating embeddings
 
 

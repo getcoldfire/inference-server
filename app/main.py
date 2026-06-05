@@ -170,8 +170,6 @@ def _model_entry_extras(m: ModelEntryConfig) -> list[tuple[str, object]]:
             batch_settings.append(f"prefill_step={m.batch_prefill_step_size}")
         if batch_settings:
             extras.append(("batch_scheduler", ", ".join(batch_settings)))
-    if m.disable_auto_resize:
-        extras.append(("auto_resize", False))
     if m.on_demand:
         extras.append(("on_demand", f"idle_timeout={m.on_demand_idle_timeout}s"))
     if m.debug:

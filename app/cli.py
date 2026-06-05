@@ -232,11 +232,6 @@ def cli():
     ),
 )
 @click.option(
-    "--disable-auto-resize",
-    is_flag=True,
-    help="Disable automatic model resizing. Only work for Vision Language Models.",
-)
-@click.option(
     "--log-file",
     default=None,
     type=str,
@@ -432,7 +427,6 @@ def launch(
     queue_timeout,
     queue_size,
     idle_unload_seconds,
-    disable_auto_resize,
     log_file,
     no_log_file,
     log_level,
@@ -504,7 +498,6 @@ def launch(
         # cli-v2 --idle-unload-seconds: > 0 flips on-demand load/unload.
         on_demand=idle_unload_seconds > 0,
         on_demand_idle_timeout=idle_unload_seconds or 60,
-        disable_auto_resize=disable_auto_resize,
         log_file=log_file,
         no_log_file=no_log_file,
         log_level=_resolve_log_level(log_level),

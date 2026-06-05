@@ -12,7 +12,6 @@ keywords = [
   "openai",
   "server",
   "api",
-  "multimodal",
   "local models",
 ]
 classifiers = [

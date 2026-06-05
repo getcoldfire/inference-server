@@ -1529,7 +1529,7 @@ class MLXLMHandler:
                 # into subsequent prompt history turns.
                 message.pop("reasoning_content", None)
 
-                # Handle content that might be a list of dictionaries (multimodal format)
+                # Handle content that might be a list of dictionaries (text-list format)
                 content = message.get("content")
                 if content is None:
                     # Assistant messages with tool_calls or partial have content: null — keep them

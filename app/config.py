@@ -26,9 +26,8 @@ class MLXServerConfig:
     """Container for server CLI configuration values.
 
     The class mirrors the Click CLI options and normalizes a few fields
-    during initialization (for example converting comma-separated
-    strings into lists and setting sensible defaults for image model
-    configurations).
+    during initialization (for example converting comma-separated strings
+    into lists).
     """
 
     model_path: str
@@ -39,7 +38,6 @@ class MLXServerConfig:
     host: str = "0.0.0.0"
     queue_timeout: int = 300
     queue_size: int = 100
-    disable_auto_resize: bool = False
     log_file: str | None = None
     no_log_file: bool = False
     log_level: str = "INFO"
@@ -137,7 +135,6 @@ class MLXServerConfig:
             queue_size=self.queue_size,
             on_demand=self.on_demand,
             on_demand_idle_timeout=self.on_demand_idle_timeout,
-            disable_auto_resize=self.disable_auto_resize,
             enable_auto_tool_choice=self.enable_auto_tool_choice,
             tool_call_parser=self.tool_call_parser,
             reasoning_parser=self.reasoning_parser,
@@ -224,7 +221,6 @@ class ModelEntryConfig:
     on_demand_idle_timeout: int = 60  # seconds before unloading idle on-demand model
 
     # LM options
-    disable_auto_resize: bool = False
     enable_auto_tool_choice: bool = False
     tool_call_parser: str | None = None
     reasoning_parser: str | None = None

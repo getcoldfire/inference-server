@@ -187,7 +187,7 @@ def create_lifespan(config_args: MLXServerConfig):
         logger.info("Shutting down application")
         if hasattr(app.state, "handler") and app.state.handler:
             try:
-                # Use the proper cleanup method which handles both request queue and image processor
+                # Use the proper cleanup method which drains the request queue
                 logger.info("Cleaning up resources")
                 await app.state.handler.cleanup()
                 logger.info("Resources cleaned up successfully")
