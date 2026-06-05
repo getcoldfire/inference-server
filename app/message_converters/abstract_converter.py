@@ -12,6 +12,4 @@ class AbstractMessageConverter:
 
     def convert_messages(self, messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
         """Convert messages to be compatible with specific model chat templates"""
-        raise NotImplementedError(
-            "AbstractMessageConverter.convert_messages has not been implemented!"
-        )
+        raise NotImplementedError("AbstractMessageConverter.convert_messages has not been implemented!")

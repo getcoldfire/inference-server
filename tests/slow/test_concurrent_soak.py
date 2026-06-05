@@ -65,23 +65,17 @@ async def test_8_concurrent_streams_15_minutes(
                         "stream": True,
                     },
                 ) as r:
-                    assert r.status_code == 200, (
-                        f"stream {idx} got status {r.status_code}"
-                    )
+                    assert r.status_code == 200, f"stream {idx} got status {r.status_code}"
                     async for line in r.aiter_lines():
                         if line.startswith("data:"):
                             text += line
                 # Own marker must appear
                 if own_marker not in text:
-                    contamination_events.append(
-                        (own_marker, "missing-own", text[:200])
-                    )
+                    contamination_events.append((own_marker, "missing-own", text[:200]))
                 # No foreign marker may appear
                 for foreign in foreign_markers:
                     if foreign in text:
-                        contamination_events.append(
-                            (own_marker, f"leaked:{foreign}", text[:200])
-                        )
+                        contamination_events.append((own_marker, f"leaked:{foreign}", text[:200]))
                 completed_counts[idx] += 1
 
     await asyncio.gather(*[stream_loop(i) for i in range(n_streams)])
@@ -94,6 +88,5 @@ async def test_8_concurrent_streams_15_minutes(
         f"Contamination events: {len(contamination_events)}."
     )
     assert not contamination_events, (
-        f"{len(contamination_events)} KV-isolation failures; first 5: "
-        f"{contamination_events[:5]}"
+        f"{len(contamination_events)} KV-isolation failures; first 5: {contamination_events[:5]}"
     )

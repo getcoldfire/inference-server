@@ -10,10 +10,10 @@ route handler in `app/api/endpoints.py` calls into this service via the
 `MLXEmbeddingsHandler` wrapper (which adds the inference-worker queue +
 process-isolation).
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import List
 
 import mlx.core as mx
 
@@ -38,7 +38,7 @@ class EmbeddingResult:
         Same as `prompt_tokens` (kept for OpenAI usage-shape parity).
     """
 
-    embeddings: List[List[float]]
+    embeddings: list[list[float]]
     prompt_tokens: int
     total_tokens: int
 
@@ -85,7 +85,7 @@ class EmbeddingService:
             # traceback (which is more useful than a sanitized warm-up error).
             pass
 
-    def embed(self, inputs: List[str], dimensions: int | None = None) -> EmbeddingResult:
+    def embed(self, inputs: list[str], dimensions: int | None = None) -> EmbeddingResult:
         """Embed a batch of input strings.
 
         Parameters
@@ -110,10 +110,10 @@ class EmbeddingService:
         # tokenizer.model_max_length is sometimes a sentinel value
         # (`int(1e30)`) for models that declare "no max"; clamp to 8192
         # so tokenize() doesn't allocate an absurd buffer.
-        raw_max = self.tokenizer.model_max_length
+        raw_max = self.tokenizer.model_max_length  # type: ignore[attr-defined]
         max_len = raw_max if raw_max < 10000 else 8192
 
-        encoded = self.tokenizer(
+        encoded = self.tokenizer(  # type: ignore[operator]
             inputs,
             padding=True,
             truncation=True,
@@ -154,8 +154,10 @@ class EmbeddingService:
 
         normalized = l2_normalize(pooled)
         prompt_tokens = int(attention_mask.sum().item())
+        # tolist() on a 2-D mlx.array returns list[list[float]] at runtime,
+        # but the stub signature is the generic union — narrow it explicitly.
         return EmbeddingResult(
-            embeddings=normalized.tolist(),
+            embeddings=normalized.tolist(),  # type: ignore[arg-type]
             prompt_tokens=prompt_tokens,
             total_tokens=prompt_tokens,
         )

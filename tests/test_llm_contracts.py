@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterable
 import json
 import os
+from collections.abc import Iterable
 from typing import Literal
 
 import pytest
@@ -227,9 +227,7 @@ class TestLLMContract:
             assert status in ["ok", "healthy", "ready"]
 
     @pytest.mark.integration
-    def test_models_endpoint(
-        self, http_client: httpx.Client, model_id: str | None, server_available: bool
-    ) -> None:
+    def test_models_endpoint(self, http_client: httpx.Client, model_id: str | None, server_available: bool) -> None:
         """Test the models endpoint."""
         if not server_available:
             pytest.skip("MLX server is not available - start server to run integration tests")
@@ -246,14 +244,10 @@ class TestLLMContract:
         if "metadata" in raw_model:
             metadata = raw_model["metadata"]
             assert "context_length" in metadata, "Model metadata missing 'context_length' field"
-            assert metadata.get("backend") == "mlx", (
-                f"Expected backend='mlx', got '{metadata.get('backend')}'"
-            )
+            assert metadata.get("backend") == "mlx", f"Expected backend='mlx', got '{metadata.get('backend')}'"
 
     @pytest.mark.integration
-    def test_chat_completion(
-        self, http_client: httpx.Client, model_id: str | None, server_available: bool
-    ) -> None:
+    def test_chat_completion(self, http_client: httpx.Client, model_id: str | None, server_available: bool) -> None:
         """Test chat completion endpoint."""
         if not server_available:
             pytest.skip("MLX server is not available - start server to run integration tests")

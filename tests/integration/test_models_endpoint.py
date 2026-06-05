@@ -25,6 +25,4 @@ def test_models_lists_loaded_model(chat_server: tuple[str, int]) -> None:
     body = r.json()
     assert body.get("object") == "list", f"unexpected top-level object: {body}"
     model_ids = [m.get("id") for m in body.get("data", [])]
-    assert CHAT_MODEL_ID in model_ids, (
-        f"expected {CHAT_MODEL_ID!r} in /v1/models response, got {model_ids!r}"
-    )
+    assert CHAT_MODEL_ID in model_ids, f"expected {CHAT_MODEL_ID!r} in /v1/models response, got {model_ids!r}"

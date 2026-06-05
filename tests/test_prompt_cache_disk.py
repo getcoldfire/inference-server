@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import importlib
-from pathlib import Path
 import sys
 import types
+from pathlib import Path
 from typing import Any
 
 

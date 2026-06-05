@@ -45,11 +45,7 @@ _REPLAY_CASES = (
     _ReplayCase(
         name="terminal_tool_before_close_split_close_tag",
         chunks=(
-            (
-                "<thinking>R "
-                '<tool_call><function=grep><parameter=regex>"x"</parameter></function></tool_call>'
-                "</thi"
-            ),
+            ('<thinking>R <tool_call><function=grep><parameter=regex>"x"</parameter></function></tool_call></thi'),
             "nking>",
         ),
         expected_tool_names=("grep",),
@@ -58,10 +54,7 @@ _REPLAY_CASES = (
     _ReplayCase(
         name="terminal_tool_before_close_split_tool_close",
         chunks=(
-            (
-                "<thinking>R "
-                '<tool_call><function=grep><parameter=regex>"x"</parameter></function></tool_'
-            ),
+            ('<thinking>R <tool_call><function=grep><parameter=regex>"x"</parameter></function></tool_'),
             "call></thinking>",
         ),
         expected_tool_names=("grep",),
@@ -153,8 +146,8 @@ _REPLAY_CASES = (
 @pytest.mark.parametrize("case", _REPLAY_CASES, ids=lambda case: case.name)
 def test_mixed_think_log_harness_structural_replays(case: _ReplayCase) -> None:
     """Replay reduced transcript structures and assert stable tool extraction."""
-    emitted_content, emitted_tool_calls, emitted_reasoning = (
-        _simulate_mixed_think_tool_handoff_handler_stream(list(case.chunks))
+    emitted_content, emitted_tool_calls, emitted_reasoning = _simulate_mixed_think_tool_handoff_handler_stream(
+        list(case.chunks)
     )
 
     observed_tool_names = tuple(tool_call.get("name", "") for tool_call in emitted_tool_calls)

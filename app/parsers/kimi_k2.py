@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from enum import Enum
 import json
 import re
+from enum import Enum
 
 from .hermes import HermesToolParser
 
@@ -27,9 +27,7 @@ class KimiK2ToolParser(HermesToolParser):
     <|tool_calls_section_begin|><|tool_call_begin|>functions.get_weather:0<|tool_call_argument_begin|>{"city": "New York"}<|tool_call_end|><|tool_calls_section_end|>
     """
 
-    def __init__(
-        self, tool_open: str = TOOL_CALL_SECTION_BEGIN, tool_close: str = TOOL_CALL_SECTION_END
-    ) -> None:
+    def __init__(self, tool_open: str = TOOL_CALL_SECTION_BEGIN, tool_close: str = TOOL_CALL_SECTION_END) -> None:
         """Initialize Solar Open tool parser."""
         super().__init__(tool_open=tool_open, tool_close=tool_close)
 

@@ -4,6 +4,7 @@ Loads the tiny_bert fixture as a complete embedding model, runs real text
 inputs through it, and verifies the output respects the documented
 contract: L2-normalized, deterministic, and tracks token usage.
 """
+
 import math
 from pathlib import Path
 

@@ -4,6 +4,7 @@ Pooling correctness drives downstream embedding-vector quality, so each
 mode is exercised on a hand-rolled tensor where the expected output is
 trivially computable in this file.
 """
+
 import math
 
 import mlx.core as mx

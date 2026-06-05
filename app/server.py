@@ -17,24 +17,23 @@ Key exports:
 
 from __future__ import annotations
 
-from contextlib import asynccontextmanager
 import gc
 import sys
 import time
+from contextlib import asynccontextmanager
 from typing import Any
 
+import uvicorn
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from loguru import logger
-import uvicorn
 
 from .api.endpoints import router
 from .config import MLXServerConfig, ModelEntryConfig, MultiModelServerConfig
 from .core.handler_process import HandlerProcessProxy
 from .core.model_registry import ModelRegistry
 from .version import __version__
-
 
 _SAMPLING_DEFAULT_FIELDS: tuple[str, ...] = (
     "default_max_tokens",
@@ -65,13 +64,11 @@ def _attach_sampling_defaults(handler: Any, config: Any) -> Any:
 
     for field_name in _SAMPLING_DEFAULT_FIELDS:
         setattr(handler, field_name, getattr(config, field_name, None))
-    setattr(handler, "_uses_model_sampling_defaults", True)
+    handler._uses_model_sampling_defaults = True
     return handler
 
 
-def configure_logging(
-    log_file: str | None = None, no_log_file: bool = False, log_level: str = "INFO"
-) -> None:
+def configure_logging(log_file: str | None = None, no_log_file: bool = False, log_level: str = "INFO") -> None:
     """Set up loguru handlers used by the server.
 
     This helper replaces the default loguru handler with a console
@@ -338,10 +335,7 @@ def create_multi_lifespan(config: MultiModelServerConfig):
                         queue_config=queue_config,
                         idle_timeout=model_cfg.on_demand_idle_timeout,
                     )
-                    logger.info(
-                        f"Model '{model_id}' registered as on-demand "
-                        f"(will load when first requested)"
-                    )
+                    logger.info(f"Model '{model_id}' registered as on-demand (will load when first requested)")
                     continue
 
                 logger.info(
@@ -377,10 +371,7 @@ def create_multi_lifespan(config: MultiModelServerConfig):
                     app.state.handler = registry.get_handler(_cfg.served_model_name)
                     break
 
-            logger.info(
-                f"Multi-handler initialization complete. "
-                f"{registry.get_model_count()} model(s) spawned."
-            )
+            logger.info(f"Multi-handler initialization complete. {registry.get_model_count()} model(s) spawned.")
 
         except Exception as e:
             logger.error(f"Failed to initialize multi-handler setup: {e}")
@@ -494,9 +485,7 @@ def setup_server(config_args: MLXServerConfig | MultiModelServerConfig) -> uvico
         if request.app.state.request_count % 50 == 0:
             _clear_mlx_cache()
             gc.collect()
-            logger.debug(
-                f"Performed memory cleanup after {request.app.state.request_count} requests"
-            )
+            logger.debug(f"Performed memory cleanup after {request.app.state.request_count} requests")
 
         return response
 

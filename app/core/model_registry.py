@@ -90,9 +90,7 @@ class ModelRegistry:
             self._handlers[model_id] = handler
             self._metadata[model_id] = metadata
 
-            logger.info(
-                f"Registered model: {model_id} (type={model_type}, context_length={context_length})"
-            )
+            logger.info(f"Registered model: {model_id} (type={model_type}, context_length={context_length})")
 
     def get_handler(self, model_id: str) -> Any:
         """Get handler for a specific model.
@@ -114,9 +112,7 @@ class ModelRegistry:
         """
         if model_id not in self._handlers:
             available = ", ".join(sorted(self._handlers.keys())) or "(none)"
-            raise KeyError(
-                f"Model '{model_id}' not found in registry. Available models: {available}"
-            )
+            raise KeyError(f"Model '{model_id}' not found in registry. Available models: {available}")
         return self._handlers[model_id]
 
     def list_model_ids(self) -> list[str]:
@@ -321,10 +317,7 @@ class ModelRegistry:
                 created_at=int(time.time()),
             )
 
-            logger.info(
-                f"Registered on-demand model: {model_id} "
-                f"(type={model_type}, idle_timeout={idle_timeout}s)"
-            )
+            logger.info(f"Registered on-demand model: {model_id} (type={model_type}, idle_timeout={idle_timeout}s)")
 
     def is_on_demand(self, model_id: str) -> bool:
         """Check if a model is registered as on-demand."""
@@ -365,8 +358,7 @@ class ModelRegistry:
                     idle_task.cancel()
                 self._on_demand_ref_count[model_id] = self._on_demand_ref_count.get(model_id, 0) + 1
                 logger.debug(
-                    f"On-demand model '{model_id}' already loaded, "
-                    f"ref_count={self._on_demand_ref_count[model_id]}"
+                    f"On-demand model '{model_id}' already loaded, ref_count={self._on_demand_ref_count[model_id]}"
                 )
                 return self._handlers[model_id]
 
@@ -386,9 +378,7 @@ class ModelRegistry:
                 if idle_task is not None:
                     idle_task.cancel()
                 old_handler = self._handlers.pop(loaded_id)
-                logger.info(
-                    f"Unloading on-demand model '{loaded_id}' to make room for '{model_id}'"
-                )
+                logger.info(f"Unloading on-demand model '{loaded_id}' to make room for '{model_id}'")
                 if hasattr(old_handler, "cleanup"):
                     await old_handler.cleanup()
                 self._on_demand_ref_count.pop(loaded_id, None)
@@ -430,19 +420,14 @@ class ModelRegistry:
             return
 
         self._on_demand_ref_count[model_id] = max(0, self._on_demand_ref_count.get(model_id, 1) - 1)
-        logger.debug(
-            f"Released on-demand model '{model_id}', "
-            f"ref_count={self._on_demand_ref_count[model_id]}"
-        )
+        logger.debug(f"Released on-demand model '{model_id}', ref_count={self._on_demand_ref_count[model_id]}")
 
         if self._on_demand_ref_count[model_id] == 0:
             timeout = self._on_demand_idle_timeouts.get(model_id, 60)
             old_task = self._on_demand_idle_tasks.pop(model_id, None)
             if old_task is not None:
                 old_task.cancel()
-            self._on_demand_idle_tasks[model_id] = asyncio.create_task(
-                self._idle_unload(model_id, timeout)
-            )
+            self._on_demand_idle_tasks[model_id] = asyncio.create_task(self._idle_unload(model_id, timeout))
 
     async def _idle_unload(self, model_id: str, timeout: int) -> None:
         """Unload an on-demand model after it has been idle.

@@ -50,9 +50,7 @@ def test_minimax_m2_tool_parsing_streaming() -> None:
     assert complete_tool_call["tool_calls"][0]["name"] == "tool_name"
     # Verify that arguments is a JSON string containing the expected parameter
     # Note: Since there are two parameters with the same name, the second overwrites the first
-    assert json.loads(complete_tool_call["tool_calls"][0]["arguments"]) == {
-        "argument_name": "argument_value"
-    }
+    assert json.loads(complete_tool_call["tool_calls"][0]["arguments"]) == {"argument_name": "argument_value"}
 
 
 if __name__ == "__main__":

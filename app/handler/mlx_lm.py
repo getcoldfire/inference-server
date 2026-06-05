@@ -1,11 +1,11 @@
 import asyncio
-from collections.abc import AsyncGenerator
 import copy
-from dataclasses import dataclass
 import gc
-from http import HTTPStatus
 import threading
 import time
+from collections.abc import AsyncGenerator
+from dataclasses import dataclass
+from http import HTTPStatus
 from typing import Any
 
 from fastapi import HTTPException
@@ -311,14 +311,11 @@ class MLXLMHandler:
         if raw_model is None or not hasattr(raw_model, "layers"):
             return
         try:
-            from mlx_lm.models.cache import make_prompt_cache  # noqa: PLC0415
             import mlx.core as mx  # noqa: PLC0415
+            from mlx_lm.models.cache import make_prompt_cache  # noqa: PLC0415
+
             cache = make_prompt_cache(raw_model)
-            token_id = (
-                getattr(tokenizer, "bos_token_id", None)
-                or getattr(tokenizer, "pad_token_id", None)
-                or 0
-            )
+            token_id = getattr(tokenizer, "bos_token_id", None) or getattr(tokenizer, "pad_token_id", None) or 0
             ids = mx.array([[token_id]])
             logits = raw_model(ids, cache=cache)
             mx.eval(logits, [c.state for c in cache])
@@ -432,9 +429,7 @@ class MLXLMHandler:
 
         sentinel_messages = [*messages[:-1], {"role": "user", "content": "x"}]
         try:
-            sentinel_prompt = self.model.create_input_prompt(
-                sentinel_messages, dict(chat_template_kwargs)
-            )
+            sentinel_prompt = self.model.create_input_prompt(sentinel_messages, dict(chat_template_kwargs))
             sentinel_ids = self.model.encode_prompt(sentinel_prompt)
         except Exception:
             logger.debug("Could not compute checkpoint boundary via sentinel substitution")
@@ -504,9 +499,7 @@ class MLXLMHandler:
             segments: list[list[int]] | None = None
             segment_types: list[str] | None = None
             if not self.model.cache_is_trimmable:
-                boundary = self._compute_checkpoint_boundary(
-                    refined_messages, input_ids, chat_template_kwargs
-                )
+                boundary = self._compute_checkpoint_boundary(refined_messages, input_ids, chat_template_kwargs)
                 if boundary is None and len(input_ids) > 1:
                     boundary = len(input_ids) - 1
                 if boundary is not None and 0 < boundary < len(input_ids):
@@ -561,9 +554,7 @@ class MLXLMHandler:
         # multi-turn conversations accumulate checkpoints at each new
         # message boundary, rather than only at the first request's.
         if not self.model.cache_is_trimmable:
-            boundary = self._compute_checkpoint_boundary(
-                refined_messages, input_ids, chat_template_kwargs
-            )
+            boundary = self._compute_checkpoint_boundary(refined_messages, input_ids, chat_template_kwargs)
             # For single-turn messages _compute_checkpoint_boundary
             # returns None because there is no previous-message
             # boundary.  Fall back to checkpointing all-but-the-last
@@ -829,9 +820,7 @@ class MLXLMHandler:
                     text = chunk.text
                     raw_text += text
                     if is_first_chunk:
-                        if reasoning_parser and hasattr(
-                            reasoning_parser, "needs_redacted_reasoning_prefix"
-                        ):
+                        if reasoning_parser and hasattr(reasoning_parser, "needs_redacted_reasoning_prefix"):
                             if reasoning_parser.needs_redacted_reasoning_prefix():
                                 text = reasoning_parser.get_reasoning_open() + text
                         is_first_chunk = False
@@ -840,9 +829,7 @@ class MLXLMHandler:
                         text = pending_texts.pop(0)
 
                         # If a tool tag opened in a previous chunk, finish tool parsing first.
-                        if tool_parser and (
-                            tool_parser.state != ToolParserState.NORMAL or bool(tool_parser.buffer)
-                        ):
+                        if tool_parser and (tool_parser.state != ToolParserState.NORMAL or bool(tool_parser.buffer)):
                             if self.debug:
                                 log_debug_parser_event(
                                     component="mlx_lm.stream.tool",
@@ -851,9 +838,7 @@ class MLXLMHandler:
                                     parser=tool_parser,
                                     text=text,
                                 )
-                            parsed_content, is_complete = tool_parser.extract_tool_calls_streaming(
-                                text
-                            )
+                            parsed_content, is_complete = tool_parser.extract_tool_calls_streaming(text)
                             if self.debug:
                                 log_debug_parser_event(
                                     component="mlx_lm.stream.tool",
@@ -889,11 +874,7 @@ class MLXLMHandler:
                                     if requeue_reasoning_tail:
                                         content = f"{content}{requeue_reasoning_tail}"
                                         requeue_reasoning_tail = ""
-                                    if (
-                                        reasoning_parser
-                                        and reasoning_parser.state
-                                        == ReasoningParserState.FOUND_PREFIX
-                                    ):
+                                    if reasoning_parser and reasoning_parser.state == ReasoningParserState.FOUND_PREFIX:
                                         pending_texts.insert(0, content)
                                     else:
                                         yield content
@@ -910,9 +891,7 @@ class MLXLMHandler:
                                     parser=reasoning_parser,
                                     text=text,
                                 )
-                            parsed_content, is_complete = (
-                                reasoning_parser.extract_reasoning_streaming(text)
-                            )
+                            parsed_content, is_complete = reasoning_parser.extract_reasoning_streaming(text)
                             if self.debug:
                                 log_debug_parser_event(
                                     component="mlx_lm.stream.reasoning",
@@ -924,9 +903,7 @@ class MLXLMHandler:
                                 )
                             reasoning_passthrough_for_tool = None
                             if parsed_content:
-                                after_reasoning_close_content = parsed_content.get(
-                                    "after_reasoning_close_content"
-                                )
+                                after_reasoning_close_content = parsed_content.get("after_reasoning_close_content")
                                 reasoning_content = parsed_content.get("reasoning_content")
                                 content_piece = parsed_content.get("content")
                                 tool_tail_overlap = False
@@ -981,9 +958,7 @@ class MLXLMHandler:
                                     parser=tool_parser,
                                     text=text,
                                 )
-                            parsed_content, is_complete = tool_parser.extract_tool_calls_streaming(
-                                text
-                            )
+                            parsed_content, is_complete = tool_parser.extract_tool_calls_streaming(text)
                             if self.debug:
                                 log_debug_parser_event(
                                     component="mlx_lm.stream.tool",
@@ -1019,11 +994,7 @@ class MLXLMHandler:
                                     if requeue_reasoning_tail:
                                         content = f"{content}{requeue_reasoning_tail}"
                                         requeue_reasoning_tail = ""
-                                    if (
-                                        reasoning_parser
-                                        and reasoning_parser.state
-                                        == ReasoningParserState.FOUND_PREFIX
-                                    ):
+                                    if reasoning_parser and reasoning_parser.state == ReasoningParserState.FOUND_PREFIX:
                                         pending_texts.insert(0, content)
                                     else:
                                         yield content
@@ -1056,14 +1027,14 @@ class MLXLMHandler:
                 )
             }
 
-        except asyncio.QueueFull:
+        except asyncio.QueueFull as e:
             logger.error("Too many requests. Service is at capacity.")
             content = create_error_response(
                 "Too many requests. Service is at capacity.",
                 "rate_limit_exceeded",
                 HTTPStatus.TOO_MANY_REQUESTS,
             )
-            raise HTTPException(status_code=429, detail=content)
+            raise HTTPException(status_code=429, detail=content) from e
         except asyncio.CancelledError:
             raise
         except Exception as e:
@@ -1073,7 +1044,7 @@ class MLXLMHandler:
                 "server_error",
                 HTTPStatus.INTERNAL_SERVER_ERROR,
             )
-            raise HTTPException(status_code=500, detail=content)
+            raise HTTPException(status_code=500, detail=content) from e
 
     async def generate_text_response(self, request: ChatCompletionRequest) -> dict[str, Any]:
         """
@@ -1129,9 +1100,7 @@ class MLXLMHandler:
                             is_complete=True,
                         )
                     if parsed_result:
-                        parsed_response["reasoning_content"] = parsed_result.get(
-                            "reasoning_content"
-                        )
+                        parsed_response["reasoning_content"] = parsed_result.get("reasoning_content")
                         parsed_response["tool_calls"] = parsed_result.get("tool_calls")
                         parsed_response["content"] = parsed_result.get("content")
                 else:
@@ -1159,9 +1128,7 @@ class MLXLMHandler:
                             is_complete=True,
                         )
                     if parsed_content:
-                        parsed_response["reasoning_content"] = parsed_content.get(
-                            "reasoning_content"
-                        )
+                        parsed_response["reasoning_content"] = parsed_content.get("reasoning_content")
                         parsed_response["content"] = parsed_content.get("content")
                         # Keep tool parsing active when no explicit reasoning open tag exists
                         # (for example raw output that starts with a stray ``</think>``).
@@ -1188,9 +1155,7 @@ class MLXLMHandler:
                             parsed_response["content"] = tool_content
                         elif parsed_response["tool_calls"]:
                             strip_source = response_text
-                            if synthetic_reasoning_open and strip_source.startswith(
-                                synthetic_reasoning_open
-                            ):
+                            if synthetic_reasoning_open and strip_source.startswith(synthetic_reasoning_open):
                                 strip_source = strip_source[len(synthetic_reasoning_open) :]
                             stripped_content = _strip_complete_tool_blocks(
                                 strip_source,
@@ -1234,14 +1199,14 @@ class MLXLMHandler:
 
             return {"response": parsed_response, "usage": usage}
 
-        except asyncio.QueueFull:
+        except asyncio.QueueFull as e:
             logger.error("Too many requests. Service is at capacity.")
             content = create_error_response(
                 "Too many requests. Service is at capacity.",
                 "rate_limit_exceeded",
                 HTTPStatus.TOO_MANY_REQUESTS,
             )
-            raise HTTPException(status_code=429, detail=content)
+            raise HTTPException(status_code=429, detail=content) from e
         except Exception as e:
             logger.error(f"Error in text response generation: {e!s}")
             content = create_error_response(
@@ -1249,7 +1214,7 @@ class MLXLMHandler:
                 "server_error",
                 HTTPStatus.INTERNAL_SERVER_ERROR,
             )
-            raise HTTPException(status_code=500, detail=content)
+            raise HTTPException(status_code=500, detail=content) from e
 
     def _is_request_batchable(self, request: ChatCompletionRequest) -> bool:
         """Return True if the request can be served by the continuous batcher.
@@ -1374,11 +1339,7 @@ class MLXLMHandler:
         effective_sampling = self.model.resolve_sampling_params(request_data)
         debug_payload = dict(request_data)
         debug_payload.update(
-            {
-                key: value
-                for key, value in effective_sampling.items()
-                if key != "eos_token_ids" and key in debug_payload
-            }
+            {key: value for key, value in effective_sampling.items() if key != "eos_token_ids" and key in debug_payload}
         )
         debug_payload["effective_sampling_params"] = effective_sampling
         return debug_payload
@@ -1519,9 +1480,7 @@ class MLXLMHandler:
         try:
             # Extract only the fields consumed by MLX_LM.__call__ instead of
             # serializing the entire Pydantic model with model_dump().
-            chat_template_kwargs = (
-                request.chat_template_kwargs.model_dump() if request.chat_template_kwargs else {}
-            )
+            chat_template_kwargs = request.chat_template_kwargs.model_dump() if request.chat_template_kwargs else {}
 
             if request.tools:
                 tools = [t.model_dump() for t in request.tools]
@@ -1584,11 +1543,7 @@ class MLXLMHandler:
                     for item in content:
                         if isinstance(item, str):
                             text_parts.append(item)
-                        elif (
-                            isinstance(item, dict)
-                            and item.get("type") == "text"
-                            and item.get("text")
-                        ):
+                        elif isinstance(item, dict) and item.get("type") == "text" and item.get("text"):
                             text_parts.append(item["text"])
                     content = "\n".join(text_parts) if text_parts else ""
 
@@ -1634,7 +1589,5 @@ class MLXLMHandler:
 
         except Exception as e:
             logger.error(f"Failed to prepare text request: {e!s}")
-            content = create_error_response(
-                f"Failed to process request: {e!s}", "bad_request", HTTPStatus.BAD_REQUEST
-            )
-            raise HTTPException(status_code=400, detail=content)
+            content = create_error_response(f"Failed to process request: {e!s}", "bad_request", HTTPStatus.BAD_REQUEST)
+            raise HTTPException(status_code=400, detail=content) from e

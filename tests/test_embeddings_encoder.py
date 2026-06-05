@@ -6,6 +6,7 @@ scripts/generate_tiny_bert_fixture.py and scripts/generate_tiny_nomic_fixture.py
 - tiny_bert: vanilla BERT (absolute position + GeLU MLP + token_type_ids).
 - tiny_nomic: nomic-bert (rotary position + SwiGLU MLP, no token_type_ids).
 """
+
 import json
 from pathlib import Path
 

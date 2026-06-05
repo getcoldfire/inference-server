@@ -23,8 +23,8 @@ import sys
 import types
 from typing import Any
 
-from click.testing import CliRunner
 import pytest
+from click.testing import CliRunner
 
 
 def _load_cli_module(monkeypatch: pytest.MonkeyPatch) -> Any:
@@ -76,9 +76,7 @@ def test_max_concurrency_wires_to_batch_completion_size(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     cli_module = _load_cli_module(monkeypatch)
-    result, captured = _run_launch(
-        cli_module, "--model", "dummy", "--max-concurrency", "9"
-    )
+    result, captured = _run_launch(cli_module, "--model", "dummy", "--max-concurrency", "9")
     assert result.exit_code == 0, result.output
     assert captured["config"].models[0].batch_completion_size == 9
 
@@ -87,9 +85,7 @@ def test_idle_unload_seconds_flips_on_demand(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     cli_module = _load_cli_module(monkeypatch)
-    result, captured = _run_launch(
-        cli_module, "--model", "dummy", "--idle-unload-seconds", "45"
-    )
+    result, captured = _run_launch(cli_module, "--model", "dummy", "--idle-unload-seconds", "45")
     assert result.exit_code == 0, result.output
     entry = captured["config"].models[0]
     assert entry.on_demand is True
@@ -119,9 +115,7 @@ def test_log_level_accepts_lowercase_and_warn_alias(
     monkeypatch: pytest.MonkeyPatch, flag_value: str, expected: str
 ) -> None:
     cli_module = _load_cli_module(monkeypatch)
-    result, captured = _run_launch(
-        cli_module, "--model", "dummy", "--log-level", flag_value
-    )
+    result, captured = _run_launch(cli_module, "--model", "dummy", "--log-level", flag_value)
     assert result.exit_code == 0, result.output
     assert captured["config"].log_level == expected
 

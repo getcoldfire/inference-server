@@ -8,15 +8,16 @@ package. The wrapper class name (`MLXEmbeddingsHandler`) and surface area
 get_queue_stats, cleanup) are preserved so the multi-model server lifespan
 in `app/server.py` can swap implementations without further changes.
 """
+
 import gc
-from http import HTTPStatus
 import time
+from http import HTTPStatus
 from typing import Any
 
 from fastapi import HTTPException
 from loguru import logger
 
-from ..core import InferenceWorker
+from ..core.inference_worker import InferenceWorker
 from ..schemas.openai import EmbeddingRequest
 from ..utils.errors import create_error_response
 from .embeddings.service import EmbeddingService
@@ -96,9 +97,7 @@ class MLXEmbeddingsHandler:
         self.inference_worker.start()
         logger.info("Initialized MLXEmbeddingsHandler and started inference worker")
 
-    async def generate_embeddings_response(
-        self, request: EmbeddingRequest
-    ) -> dict[str, Any]:
+    async def generate_embeddings_response(self, request: EmbeddingRequest) -> dict[str, Any]:
         """Embed `request.input` and return ``{"embeddings": [...], "usage": {...}}``.
 
         Returns a dict so the route handler can populate the OpenAI
@@ -121,9 +120,7 @@ class MLXEmbeddingsHandler:
 
             # Submit to the inference worker. We forward `dimensions` so
             # per-request matryoshka truncation works end-to-end.
-            result = await self.inference_worker.submit(
-                self.service.embed, inputs, request.dimensions
-            )
+            result = await self.inference_worker.submit(self.service.embed, inputs, request.dimensions)
             return {
                 "embeddings": result.embeddings,
                 "usage": {
@@ -139,7 +136,7 @@ class MLXEmbeddingsHandler:
                 "server_error",
                 HTTPStatus.INTERNAL_SERVER_ERROR,
             )
-            raise HTTPException(status_code=500, detail=content)
+            raise HTTPException(status_code=500, detail=content) from e
 
     async def get_queue_stats(self) -> dict[str, Any]:
         """Inference-worker stats: `queue_stats` sub-dict for the `/queue` route."""

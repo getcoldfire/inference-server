@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from contextlib import contextmanager
 import threading
 import types
+from contextlib import contextmanager
 from typing import Any
 
 import pytest
@@ -41,9 +41,7 @@ async def test_submit_runs_inside_worker_thread_local_stream(
     worker = InferenceWorker()
     worker.start()
     try:
-        result = await worker.submit(
-            lambda: local.active_stream is stream_obj and worker._stream is stream_obj
-        )
+        result = await worker.submit(lambda: local.active_stream is stream_obj and worker._stream is stream_obj)
     finally:
         worker.stop()
 

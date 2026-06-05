@@ -5,6 +5,7 @@ scripts/generate_tiny_bert_fixture.py and scripts/generate_tiny_nomic_fixture.py
 Also exercises the fail-loud config validator by mutating copies of those
 fixtures into unsupported variants.
 """
+
 import json
 import shutil
 import tempfile
@@ -154,9 +155,5 @@ def test_remap_splits_nomic_combined_qkv():
         assert out[k].shape == (H, H)
     # And the first H rows of combined are the query
     np.testing.assert_array_equal(out["encoder.layer.0.attention.self.query.weight"], combined[:H])
-    np.testing.assert_array_equal(
-        out["encoder.layer.0.attention.self.key.weight"], combined[H : 2 * H]
-    )
-    np.testing.assert_array_equal(
-        out["encoder.layer.0.attention.self.value.weight"], combined[2 * H :]
-    )
+    np.testing.assert_array_equal(out["encoder.layer.0.attention.self.key.weight"], combined[H : 2 * H])
+    np.testing.assert_array_equal(out["encoder.layer.0.attention.self.value.weight"], combined[2 * H :])

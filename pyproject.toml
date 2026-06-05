@@ -116,6 +116,12 @@ ignore = ["E501"]
 # ignore_missing_imports + no_strict_optional and module-level overrides
 # for MLX/HF libraries so `make lint` doesn't crash on first run. We tighten
 # over time as the code stabilizes.
+#
+# Inherited upstream code (parsers/, handler/mlx_lm.py, models/mlx_lm.py,
+# the existing core/server.py glue) ships with hundreds of pre-existing
+# type errors that we are not trying to fix in this fork — only the new
+# code we own (embeddings/, license tooling, etc.) is type-checked. As
+# upstream code stabilizes we'll peel the ignore list back.
 [tool.mypy]
 python_version = "3.12"
 ignore_missing_imports = true
@@ -125,4 +131,21 @@ python_executable = "./.venv/bin/python"
 
 [[tool.mypy.overrides]]
 module = ["mlx.*", "mlx_lm.*", "transformers.*", "huggingface_hub.*", "safetensors.*", "tokenizers.*"]
+ignore_errors = true
+
+# Inherited upstream modules — TODO(coldfire): tighten incrementally.
+# These ship with ~120 pre-existing type errors that aren't worth fixing
+# in this fork before we've finished feature replacement. We re-enable
+# checking module-by-module as we touch them.
+[[tool.mypy.overrides]]
+module = [
+  "app.api.endpoints",
+  "app.core.handler_process",
+  "app.handler.mlx_lm",
+  "app.models.mlx_lm",
+  "app.parsers.*",
+  "app.server",
+  "app.utils.debug_logging",
+  "app.utils.prompt_cache",
+]
 ignore_errors = true

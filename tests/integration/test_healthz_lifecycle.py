@@ -16,7 +16,6 @@ from __future__ import annotations
 
 import os
 import signal
-import socket
 import subprocess
 import sys
 import time
@@ -85,16 +84,12 @@ def test_healthz_503_during_load_then_200_when_ready() -> None:
                     # Loading — keep polling
                     pass
                 else:
-                    pytest.fail(
-                        f"unexpected healthz status {r.status_code} during load: {r.text}"
-                    )
+                    pytest.fail(f"unexpected healthz status {r.status_code} during load: {r.text}")
             except (httpx.HTTPError, OSError):
                 observed_states.append("conn_refused")
             time.sleep(0.05)
 
-        assert saw_ready, (
-            f"healthz never returned 200 within 60s; observed: {observed_states[-20:]!r}"
-        )
+        assert saw_ready, f"healthz never returned 200 within 60s; observed: {observed_states[-20:]!r}"
         # Sanity: at least *some* state was observed before ready (proves the
         # readiness probe sequence happened — we can't strictly require a 503
         # observation because a fast-loading model may flip to 200 before our

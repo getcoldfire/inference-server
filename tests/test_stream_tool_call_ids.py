@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import AsyncGenerator, Iterable
 import json
-from typing import Any
 import unittest
+from collections.abc import AsyncGenerator, Iterable
+from typing import Any
 
 from app.api.endpoints import handle_stream_response
 
@@ -69,9 +69,7 @@ class StreamToolCallIdTests(unittest.TestCase):
         assert [entry["index"] for entry in tool_entries] == [0, 0, 0]
 
         tool_ids = [entry["id"] for entry in tool_entries]
-        assert len(set(tool_ids)) == 1, (
-            "Expected one stable tool_call id for all deltas of index 0."
-        )
+        assert len(set(tool_ids)) == 1, "Expected one stable tool_call id for all deltas of index 0."
 
     def test_tool_call_index_and_id_advance_with_new_calls(self) -> None:
         """A new tool call should increment index and use a new stable ID."""
@@ -91,9 +89,7 @@ class StreamToolCallIdTests(unittest.TestCase):
         tool_ids = [entry["id"] for entry in tool_entries]
         assert tool_ids[0] == tool_ids[1], "Expected index 0 deltas to reuse the same tool_call id."
         assert tool_ids[2] == tool_ids[3], "Expected index 1 deltas to reuse the same tool_call id."
-        assert tool_ids[0] != tool_ids[2], (
-            "Expected different tool calls to have different tool_call ids."
-        )
+        assert tool_ids[0] != tool_ids[2], "Expected different tool calls to have different tool_call ids."
 
 
 if __name__ == "__main__":

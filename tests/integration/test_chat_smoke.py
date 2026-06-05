@@ -81,7 +81,5 @@ def test_streaming_completion(chat_server: tuple[str, int]) -> None:
     assert chunks, "no SSE chunks received before [DONE]"
     assert "choices" in chunks[0], f"first chunk missing 'choices': {chunks[0]!r}"
     # At least one chunk must carry actual text content in delta.content.
-    seen_text = any(
-        (c.get("choices") or [{}])[0].get("delta", {}).get("content") for c in chunks
-    )
+    seen_text = any((c.get("choices") or [{}])[0].get("delta", {}).get("content") for c in chunks)
     assert seen_text, f"no delta.content in any of {len(chunks)} chunks"

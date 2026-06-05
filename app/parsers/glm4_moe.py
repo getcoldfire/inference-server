@@ -19,9 +19,7 @@ class GLM4MoEReasoningParser(HermesReasoningParser):
     <think>reasoning_content</think>
     """
 
-    def __init__(
-        self, reasoning_open: str = REASONING_OPEN, reasoning_close: str = REASONING_CLOSE
-    ) -> None:
+    def __init__(self, reasoning_open: str = REASONING_OPEN, reasoning_close: str = REASONING_CLOSE) -> None:
         """Initialize the Hermes4 reasoning parser with appropriate regex patterns."""
         super().__init__(reasoning_open=reasoning_open, reasoning_close=reasoning_close)
 
@@ -56,9 +54,7 @@ class GLM4MoEToolParser(AbstractToolParser):
         super().__init__(tool_open=tool_open, tool_close=tool_close)
 
         self.func_call_regex = re.compile(r"<tool_call>.*?</tool_call>", re.DOTALL)
-        self.func_detail_regex = re.compile(
-            r"<tool_call>(.*?)(<arg_key>.*?)?</tool_call>", re.DOTALL
-        )
+        self.func_detail_regex = re.compile(r"<tool_call>(.*?)(<arg_key>.*?)?</tool_call>", re.DOTALL)
         self.func_arg_regex = re.compile(
             r"<arg_key>(.*?)</arg_key>(?:\\n|\s)*<arg_value>(.*?)</arg_value>",
             re.DOTALL,
@@ -92,7 +88,5 @@ class GLM4MoEToolParser(AbstractToolParser):
                 arg_key = key.strip()
                 arg_value = value.strip()
                 arg_dct[arg_key] = arg_value
-            tool_calls.append(
-                {"name": tc_name.strip(), "arguments": json.dumps(arg_dct, ensure_ascii=False)}
-            )
+            tool_calls.append({"name": tc_name.strip(), "arguments": json.dumps(arg_dct, ensure_ascii=False)})
         return {"tool_calls": tool_calls}

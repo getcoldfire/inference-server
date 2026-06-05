@@ -55,9 +55,7 @@ def test_long_context_does_not_kernel_panic(
             f"{base_url}/v1/chat/completions",
             json={
                 "model": CHAT_MODEL_ID,
-                "messages": [
-                    {"role": "user", "content": long_input + "\n\nSummarize."}
-                ],
+                "messages": [{"role": "user", "content": long_input + "\n\nSummarize."}],
                 "max_tokens": 50,
             },
             timeout=600.0,
@@ -65,23 +63,13 @@ def test_long_context_does_not_kernel_panic(
     except httpx.TransportError as e:
         # Connection-level failure (server died, broken pipe, etc.) is a
         # process-death signal — fail with diagnostic.
-        pytest.fail(
-            f"transport error during long-context request "
-            f"(server alive? {proc.is_running()}): {e}"
-        )
+        pytest.fail(f"transport error during long-context request (server alive? {proc.is_running()}): {e}")
 
     # The strict requirement: server is still alive. 200 (handled) or 503
     # (rejected as too large) are both acceptable outcomes; what's not
     # acceptable is the server subprocess dying.
-    assert proc.is_running(), (
-        f"server subprocess died handling long-context request "
-        f"(HTTP status={r.status_code})"
-    )
+    assert proc.is_running(), f"server subprocess died handling long-context request (HTTP status={r.status_code})"
     assert r.status_code in (200, 503), (
-        f"unexpected status code from long-context request: {r.status_code} "
-        f"{r.text[:300]}"
+        f"unexpected status code from long-context request: {r.status_code} {r.text[:300]}"
     )
-    print(
-        f"\nLong-context safety: ~16k-token request returned {r.status_code}, "
-        f"server still alive."
-    )
+    print(f"\nLong-context safety: ~16k-token request returned {r.status_code}, server still alive.")

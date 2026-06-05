@@ -24,9 +24,7 @@ def log_debug_request(request_dict: dict[str, Any]) -> None:
         for i, msg in enumerate(request_dict["messages"], 1):
             role = msg.get("role", "unknown")
             content = msg.get("content", "")
-            content_preview = (
-                str(content)[:100] + "..." if len(str(content)) > 100 else str(content)
-            )
+            content_preview = str(content)[:100] + "..." if len(str(content)) > 100 else str(content)
             logger.info(f"   {i}. [{role}] {content_preview}")
 
     if request_dict.get("max_tokens"):

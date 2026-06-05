@@ -57,9 +57,7 @@ def test_qwen3_moe_reasoning_and_tool_parsing_streaming() -> None:
     # Verify reasoning parser extracted content correctly
     assert len(reasoning_results) > 0
     # Check that we got reasoning results for the chunks with reasoning tags
-    assert any(
-        "reasoning_content" in result for result in reasoning_results if isinstance(result, dict)
-    )
+    assert any("reasoning_content" in result for result in reasoning_results if isinstance(result, dict))
     # The final reasoning result should contain the closing tag and after content
     final_reasoning = reasoning_results[-1]
     assert isinstance(final_reasoning, dict)
@@ -81,9 +79,7 @@ def test_qwen3_moe_reasoning_and_tool_parsing_streaming() -> None:
     assert len(complete_tool_call["tool_calls"]) == 1
     assert complete_tool_call["tool_calls"][0]["name"] == "tool_name"
     # Verify that arguments is a JSON string containing the expected parameter
-    assert json.loads(complete_tool_call["tool_calls"][0]["arguments"]) == {
-        "argument_name": "argument_value"
-    }
+    assert json.loads(complete_tool_call["tool_calls"][0]["arguments"]) == {"argument_name": "argument_value"}
 
 
 if __name__ == "__main__":

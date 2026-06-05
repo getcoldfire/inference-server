@@ -1,14 +1,14 @@
 from __future__ import annotations
 
-from collections.abc import Generator, Iterable
-from dataclasses import dataclass
 import json
 import os
+from collections.abc import Generator, Iterable
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from loguru import logger
 import mlx.core as mx
+from loguru import logger
 from mlx_lm.generate import GenerationResponse, stream_generate
 from mlx_lm.models.cache import can_trim_prompt_cache, make_prompt_cache
 from mlx_lm.sample_utils import make_logits_processors, make_sampler
@@ -178,11 +178,9 @@ class MLX_LM:
                     template_content = f.read()
                     self.tokenizer.chat_template = template_content
                 if self.debug:
-                    log_debug_chat_template(
-                        chat_template_file=chat_template_file, template_content=template_content
-                    )
+                    log_debug_chat_template(chat_template_file=chat_template_file, template_content=template_content)
         except Exception as e:
-            raise ValueError(f"Error loading model: {e!s}")
+            raise ValueError(f"Error loading model: {e!s}") from e
 
     def _normalize_eos_token_ids(self, model_config: dict[str, Any]) -> None:
         """Populate tokenizer EOS IDs strictly from model metadata.
@@ -211,18 +209,15 @@ class MLX_LM:
                 lazy=False,
                 tokenizer_config={"trust_remote_code": trust_remote_code},
             )
-            self.context_length = (
-                None  # speculative decoding does not support context length, should be set to None
-            )
+            self.context_length = None  # speculative decoding does not support context length, should be set to None
             self._validate_draft_tokenizer()
         except Exception as e:
-            raise ValueError(f"Error loading draft model: {e!s}")
+            raise ValueError(f"Error loading draft model: {e!s}") from e
 
     def _validate_draft_tokenizer(self) -> None:
         if self.draft_tokenizer.vocab_size != self.tokenizer.vocab_size:
             logger.warning(
-                "Draft model tokenizer does not match model tokenizer. "
-                "Speculative decoding may not work as expected."
+                "Draft model tokenizer does not match model tokenizer. Speculative decoding may not work as expected."
             )
 
     def create_prompt_cache(self) -> list[Any]:
@@ -234,9 +229,7 @@ class MLX_LM:
     def get_model_type(self) -> str:
         return self.model_type
 
-    def create_input_prompt(
-        self, messages: list[dict[str, str]], chat_template_kwargs: dict[str, Any]
-    ) -> str:
+    def create_input_prompt(self, messages: list[dict[str, str]], chat_template_kwargs: dict[str, Any]) -> str:
         use_partial = chat_template_kwargs.pop("_partial_mode", False)
 
         return self.tokenizer.apply_chat_template(
@@ -355,9 +348,7 @@ class MLX_LM:
             "max_tokens": self.resolve_max_tokens(params),
             "seed": _get("seed", DEFAULT_SEED),
             "repetition_penalty": _get("repetition_penalty", DEFAULT_REPETITION_PENALTY),
-            "repetition_context_size": _get(
-                "repetition_context_size", DEFAULT_REPETITION_CONTEXT_SIZE
-            ),
+            "repetition_context_size": _get("repetition_context_size", DEFAULT_REPETITION_CONTEXT_SIZE),
             "presence_penalty": _get("presence_penalty", DEFAULT_PRESENCE_PENALTY),
             "frequency_penalty": _get("frequency_penalty", DEFAULT_FREQUENCY_PENALTY),
             "xtc_probability": _get("xtc_probability", DEFAULT_XTC_PROBABILITY),
@@ -579,9 +570,7 @@ class MLX_LM:
         json_schema = kwargs.get("schema")
         if json_schema:
             logits_processors.append(
-                JSONLogitsProcessor(
-                    schema=json_schema, tokenizer=self.outlines_tokenizer, tensor_library_name="mlx"
-                )
+                JSONLogitsProcessor(schema=json_schema, tokenizer=self.outlines_tokenizer, tensor_library_name="mlx")
             )
 
         # Only seed RNG when an explicit non-negative seed is provided

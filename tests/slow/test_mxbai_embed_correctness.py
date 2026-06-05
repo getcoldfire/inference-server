@@ -25,7 +25,6 @@ import pytest
 
 from tests.integration.conftest import (
     _boot_server,
-    _free_port,
     _teardown_server,
     _wait_for_healthz,
     requires_apple_silicon,
@@ -51,9 +50,7 @@ def _resolve_mxbai_model() -> str:
             return candidate
         except Exception:  # noqa: BLE001 — any HF failure → try next
             continue
-    pytest.skip(
-        f"none of {_MXBAI_CANDIDATES} reachable on HuggingFace; cannot run mxbai correctness"
-    )
+    pytest.skip(f"none of {_MXBAI_CANDIDATES} reachable on HuggingFace; cannot run mxbai correctness")
 
 
 @pytest.fixture(scope="module")
@@ -103,9 +100,7 @@ def test_mxbai_embed_matches_reference(
     assert r.status_code == 200, f"embeddings request failed: {r.text[:500]}"
     our_vectors = np.array([d["embedding"] for d in r.json()["data"]])
 
-    assert our_vectors.shape == ref_vectors.shape, (
-        f"shape mismatch: ours {our_vectors.shape} ref {ref_vectors.shape}"
-    )
+    assert our_vectors.shape == ref_vectors.shape, f"shape mismatch: ours {our_vectors.shape} ref {ref_vectors.shape}"
     cosines = (our_vectors * ref_vectors).sum(axis=1)
     min_cos = float(cosines.min())
     mean_cos = float(cosines.mean())
@@ -113,11 +108,5 @@ def test_mxbai_embed_matches_reference(
         f"\nmxbai-embed-large-v1 ({model_id}) vs reference: "
         f"{len(corpus)} docs, min_cos={min_cos:.5f} mean_cos={mean_cos:.5f}"
     )
-    bad = [
-        (i, float(c), corpus[i][:60])
-        for i, c in enumerate(cosines)
-        if c < 0.999
-    ]
-    assert not bad, (
-        f"{len(bad)} docs below 0.999 cosine threshold; first 5: {bad[:5]}"
-    )
+    bad = [(i, float(c), corpus[i][:60]) for i, c in enumerate(cosines) if c < 0.999]
+    assert not bad, f"{len(bad)} docs below 0.999 cosine threshold; first 5: {bad[:5]}"

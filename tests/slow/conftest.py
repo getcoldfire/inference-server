@@ -48,9 +48,7 @@ def embedding_server() -> Iterator[tuple[str, int]]:
             except subprocess.TimeoutExpired:
                 proc.kill()
                 out, _ = proc.communicate()
-            pytest.fail(
-                f"embedding server failed to become healthy on :{port}.\nOutput:\n{out}"
-            )
+            pytest.fail(f"embedding server failed to become healthy on :{port}.\nOutput:\n{out}")
         yield (f"http://127.0.0.1:{port}", proc.pid)
     finally:
         _teardown_server(proc)

@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from enum import StrEnum
 import time
-from typing import Any, ClassVar, Literal, TypeAlias
 import uuid
+from enum import StrEnum
+from typing import Any, ClassVar, Literal, TypeAlias
 
 from loguru import logger
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -65,9 +65,7 @@ class HealthCheckResponse(OpenAIBaseModel):
 
     status: HealthCheckStatus = Field(..., description="The status of the health check.")
     model_id: str | None = Field(None, description="ID of the loaded model, if any.")
-    model_status: str | None = Field(
-        None, description="Status of the model handler (initialized/uninitialized)."
-    )
+    model_status: str | None = Field(None, description="Status of the model handler (initialized/uninitialized).")
 
 
 class ErrorResponse(OpenAIBaseModel):
@@ -149,18 +147,14 @@ class Message(OpenAIBaseModel):
         description="The content of the message, either text or a list of text content items.",
     )
     refusal: str | None = Field(None, description="The refusal reason, if any.")
-    role: Literal["system", "user", "assistant", "tool"] = Field(
-        ..., description="The role of the message sender."
-    )
+    role: Literal["system", "user", "assistant", "tool"] = Field(..., description="The role of the message sender.")
     name: str | None = Field(
         None,
         description="An optional name for the participant. "
         "Rendered into the chat template for models that support named messages.",
     )
     reasoning_content: str | None = Field(None, description="The reasoning content, if any.")
-    tool_calls: list[ChatCompletionMessageToolCall] | None = Field(
-        None, description="List of tool calls, if any."
-    )
+    tool_calls: list[ChatCompletionMessageToolCall] | None = Field(None, description="List of tool calls, if any.")
     tool_call_id: str | None = Field(None, description="The ID of the tool call, if any.")
     partial: bool = Field(
         False,
@@ -203,29 +197,19 @@ class ChatCompletionRequest(OpenAIBaseModel):
 
     model: str = Field(Config.TEXT_MODEL, description="The model to use for completion.")
     messages: list[Message] = Field(..., description="The list of messages in the conversation.")
-    tools: list[ChatCompletionToolsParam] | None = Field(
-        None, description="List of tools available for the request."
-    )
-    tool_choice: Literal["none", "auto", "required"] | ChatCompletionNamedToolChoiceParam | None = (
-        "none"
-    )
+    tools: list[ChatCompletionToolsParam] | None = Field(None, description="List of tools available for the request.")
+    tool_choice: Literal["none", "auto", "required"] | ChatCompletionNamedToolChoiceParam | None = "none"
     max_tokens: int | None = Field(
         default=None,
         deprecated="max_tokens is deprecated in favor of the max_completion_tokens field",
     )
-    max_completion_tokens: int | None = Field(
-        None, description="Maximum number of tokens to generate."
-    )
+    max_completion_tokens: int | None = Field(None, description="Maximum number of tokens to generate.")
     temperature: float | None = Field(None, description="Sampling temperature.")
     top_p: float | None = Field(None, description="Nucleus sampling probability.")
     top_k: int | None = Field(None, description="Top-k sampling parameter.")
     min_p: float | None = Field(None, description="Minimum probability for token generation.")
-    frequency_penalty: float | None = Field(
-        None, description="Frequency penalty for token generation."
-    )
-    presence_penalty: float | None = Field(
-        None, description="Presence penalty for token generation."
-    )
+    frequency_penalty: float | None = Field(None, description="Frequency penalty for token generation.")
+    presence_penalty: float | None = Field(None, description="Presence penalty for token generation.")
     stop: list[str] | None = Field(None, description="List of stop sequences.")
     n: int | None = Field(None, description="Number of completions to generate.")
     response_format: dict[str, Any] | None = Field(None, description="Format for the response.")
@@ -234,15 +218,9 @@ class ChatCompletionRequest(OpenAIBaseModel):
         description="The seed to use for sampling.",
     )
     user: str | None = Field(None, description="User identifier.")
-    repetition_penalty: float | None = Field(
-        None, description="Repetition penalty for token generation."
-    )
-    repetition_context_size: int | None = Field(
-        None, description="Repetition context size for token generation."
-    )
-    xtc_probability: float | None = Field(
-        None, description="XTC (eXclude Top Choices) sampling probability (0.0-1.0)."
-    )
+    repetition_penalty: float | None = Field(None, description="Repetition penalty for token generation.")
+    repetition_context_size: int | None = Field(None, description="Repetition context size for token generation.")
+    xtc_probability: float | None = Field(None, description="XTC (eXclude Top Choices) sampling probability (0.0-1.0).")
     xtc_threshold: float | None = Field(None, description="XTC sampling threshold (0.0-0.5).")
     logit_bias: dict[str, float] | None = Field(
         None,
@@ -258,8 +236,8 @@ class ChatCompletionRequest(OpenAIBaseModel):
 class Choice(OpenAIBaseModel):
     """Represents a choice in a chat completion response."""
 
-    finish_reason: Literal["stop", "length", "tool_calls", "content_filter", "function_call"] = (
-        Field(..., description="The reason for the choice.")
+    finish_reason: Literal["stop", "length", "tool_calls", "content_filter", "function_call"] = Field(
+        ..., description="The reason for the choice."
     )
     index: int = Field(..., description="The index of the choice.")
     message: Message = Field(..., description="The message of the choice.")
@@ -269,9 +247,7 @@ class ChatCompletionResponse(OpenAIBaseModel):
     """Represents a complete chat completion response."""
 
     id: str = Field(..., description="The response ID.")
-    object: Literal["chat.completion"] = Field(
-        ..., description="The object type, always 'chat.completion'."
-    )
+    object: Literal["chat.completion"] = Field(..., description="The object type, always 'chat.completion'.")
     created: int = Field(..., description="The creation timestamp.")
     model: str = Field(..., description="The model used for completion.")
     choices: list[Choice] = Field(..., description="List of choices in the response.")
@@ -291,9 +267,7 @@ class ChoiceDeltaToolCall(OpenAIBaseModel):
 
     index: int | None = Field(None, description="Index of the tool call delta.")
     id: str | None = Field(None, description="ID of the tool call delta.")
-    function: ChoiceDeltaFunctionCall | None = Field(
-        None, description="Function call details in the delta."
-    )
+    function: ChoiceDeltaFunctionCall | None = Field(None, description="Function call details in the delta.")
     type: str | None = Field(None, description="Type of the tool call delta.")
 
 
@@ -301,16 +275,10 @@ class Delta(OpenAIBaseModel):
     """Represents a delta in a streaming response."""
 
     content: str | None = Field(None, description="Content of the delta.")
-    function_call: ChoiceDeltaFunctionCall | None = Field(
-        None, description="Function call delta, if any."
-    )
+    function_call: ChoiceDeltaFunctionCall | None = Field(None, description="Function call delta, if any.")
     refusal: str | None = Field(None, description="Refusal reason, if any.")
-    role: Literal["system", "user", "assistant", "tool"] | None = Field(
-        None, description="Role in the delta."
-    )
-    tool_calls: list[ChoiceDeltaToolCall] | None = Field(
-        None, description="List of tool call deltas, if any."
-    )
+    role: Literal["system", "user", "assistant", "tool"] | None = Field(None, description="Role in the delta.")
+    tool_calls: list[ChoiceDeltaToolCall] | None = Field(None, description="List of tool call deltas, if any.")
     reasoning_content: str | None = Field(None, description="Reasoning content, if any.")
 
 
@@ -318,9 +286,9 @@ class StreamingChoice(OpenAIBaseModel):
     """Represents a choice in a streaming response."""
 
     delta: Delta | None = Field(None, description="The delta for this streaming choice.")
-    finish_reason: (
-        Literal["stop", "length", "tool_calls", "content_filter", "function_call"] | None
-    ) = Field(None, description="The reason for finishing, if any.")
+    finish_reason: Literal["stop", "length", "tool_calls", "content_filter", "function_call"] | None = Field(
+        None, description="The reason for finishing, if any."
+    )
     index: int = Field(..., description="The index of the streaming choice.")
 
 
@@ -328,9 +296,7 @@ class ChatCompletionChunk(OpenAIBaseModel):
     """Represents a chunk in a streaming chat completion response."""
 
     id: str = Field(..., description="The chunk ID.")
-    choices: list[StreamingChoice] = Field(
-        ..., description="List of streaming choices in the chunk."
-    )
+    choices: list[StreamingChoice] = Field(..., description="List of streaming choices in the chunk.")
     created: int = Field(..., description="The creation timestamp of the chunk.")
     model: str = Field(..., description="The model used for the chunk.")
     object: Literal["chat.completion.chunk"] = Field(
@@ -350,9 +316,7 @@ class EmbeddingRequest(OpenAIBaseModel):
     """
 
     model: str = Field(Config.EMBEDDING_MODEL, description="The embedding model to use.")
-    input: list[str] | str = Field(
-        ..., description="A single text input or a list of text inputs to embed."
-    )
+    input: list[str] | str = Field(..., description="A single text input or a list of text inputs to embed.")
     user: str | None = Field(default=None, description="User identifier.")
     encoding_format: Literal["float", "base64"] = Field(
         default="float", description="The encoding format for the embedding."
@@ -369,9 +333,7 @@ class EmbeddingRequest(OpenAIBaseModel):
 class EmbeddingResponseData(OpenAIBaseModel):
     """Represents an embedding object in an embedding response."""
 
-    embedding: list[float] | str = Field(
-        ..., description="The embedding vector or the base64 encoded embedding."
-    )
+    embedding: list[float] | str = Field(..., description="The embedding vector or the base64 encoded embedding.")
     index: int = Field(..., description="The index of the embedding in the list.")
     object: str = Field(default="embedding", description="The object type, always 'embedding'.")
 
@@ -404,15 +366,18 @@ class ModelsResponse(OpenAIBaseModel):
 
 # --- Responses API Schemas ---
 
-from openai.types.responses import ResponseOutputItem, ResponseStatus
-from openai.types.responses.response import IncompleteDetails, Tool, ToolChoice
-from openai.types.shared import Reasoning
+# These imports are placed here (after the Chat Completions schemas) on purpose:
+# they're scoped to the Responses API block below. Moving them to the top would
+# scatter the section divider. noqa: E402 — intentional layout choice.
+from openai.types.responses import ResponseOutputItem, ResponseStatus  # noqa: E402
+from openai.types.responses.response import IncompleteDetails, Tool, ToolChoice  # noqa: E402
+from openai.types.shared import Reasoning  # noqa: E402
 
 # Accept any dict in ``input`` items and ``tools`` so that clients such as
 # OpenAI Codex CLI (which send the full conversation history including
 # custom_tool_call, compaction, reasoning, etc.) are not rejected by strict
 # Pydantic validation against the SDK's narrower TypedDict unions.
-ResponseInputOutputItem: TypeAlias = dict[str, Any]
+ResponseInputOutputItem: TypeAlias = dict[str, Any]  # noqa: UP040 — keep TypeAlias for Python 3.11 compat (project supports >=3.11)
 
 
 class ResponseTextConfig(OpenAIBaseModel):
@@ -444,17 +409,11 @@ class ResponsesRequest(OpenAIBaseModel):
     top_p: float | None = Field(None, description="Nucleus sampling probability.")
     top_k: int | None = Field(None, description="Top-k sampling parameter.")
     min_p: float | None = Field(None, description="Minimum probability for token generation.")
-    repetition_penalty: float | None = Field(
-        None, description="Repetition penalty for token generation."
-    )
+    repetition_penalty: float | None = Field(None, description="Repetition penalty for token generation.")
     seed: int | None = Field(None, description="The seed for the response.")
     text: ResponseTextConfig | None = None
-    tools: list[dict[str, Any]] | None = Field(
-        None, description="List of tools to use for the response."
-    )
-    tool_choice: ToolChoice | None = Field(
-        default="auto", description="The tool choice to use for the response."
-    )
+    tools: list[dict[str, Any]] | None = Field(None, description="List of tools to use for the response.")
+    tool_choice: ToolChoice | None = Field(default="auto", description="The tool choice to use for the response.")
     reasoning: Reasoning | None = None
 
 

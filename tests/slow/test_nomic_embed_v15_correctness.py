@@ -65,23 +65,11 @@ def test_nomic_embed_v15_matches_reference(
     assert r.status_code == 200, f"embeddings request failed: {r.text[:500]}"
     our_vectors = np.array([d["embedding"] for d in r.json()["data"]])
 
-    assert our_vectors.shape == ref_vectors.shape, (
-        f"shape mismatch: ours {our_vectors.shape} ref {ref_vectors.shape}"
-    )
+    assert our_vectors.shape == ref_vectors.shape, f"shape mismatch: ours {our_vectors.shape} ref {ref_vectors.shape}"
     # Both vectors L2-normalized; cosine = dot product
     cosines = (our_vectors * ref_vectors).sum(axis=1)
     min_cos = float(cosines.min())
     mean_cos = float(cosines.mean())
-    print(
-        f"\nnomic-embed-text-v1.5 vs reference: "
-        f"{len(corpus)} docs, min_cos={min_cos:.5f} mean_cos={mean_cos:.5f}"
-    )
-    bad = [
-        (i, float(c), corpus[i][:60])
-        for i, c in enumerate(cosines)
-        if c < 0.999
-    ]
-    assert not bad, (
-        f"{len(bad)} docs below 0.999 cosine threshold; first 5: "
-        f"{bad[:5]}"
-    )
+    print(f"\nnomic-embed-text-v1.5 vs reference: {len(corpus)} docs, min_cos={min_cos:.5f} mean_cos={mean_cos:.5f}")
+    bad = [(i, float(c), corpus[i][:60]) for i, c in enumerate(cosines) if c < 0.999]
+    assert not bad, f"{len(bad)} docs below 0.999 cosine threshold; first 5: {bad[:5]}"

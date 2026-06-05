@@ -33,7 +33,6 @@ from app.main import (
     _arm_shutdown_watchdog,
 )
 
-
 # ---------------------------------------------------------------------------
 # Unit test: signal handler behavior (no server boot, runs everywhere)
 # ---------------------------------------------------------------------------
@@ -165,17 +164,15 @@ def test_sigterm_exits_within_5s() -> None:
             proc.wait(timeout=SHUTDOWN_DEADLINE_SECONDS + 2.0)
         except subprocess.TimeoutExpired:
             proc.kill()
-            pytest.fail(
-                f"Process did not exit within {SHUTDOWN_DEADLINE_SECONDS + 2.0}s of SIGTERM"
-            )
+            pytest.fail(f"Process did not exit within {SHUTDOWN_DEADLINE_SECONDS + 2.0}s of SIGTERM")
         elapsed = time.monotonic() - start
 
-        assert (
-            proc.returncode == 0
-        ), f"expected exit code 0, got {proc.returncode}; output:\n{proc.stdout.read() if proc.stdout else ''}"
-        assert (
-            elapsed < SHUTDOWN_DEADLINE_SECONDS
-        ), f"SIGTERM exit took {elapsed:.2f}s, budget is {SHUTDOWN_DEADLINE_SECONDS}s"
+        assert proc.returncode == 0, (
+            f"expected exit code 0, got {proc.returncode}; output:\n{proc.stdout.read() if proc.stdout else ''}"
+        )
+        assert elapsed < SHUTDOWN_DEADLINE_SECONDS, (
+            f"SIGTERM exit took {elapsed:.2f}s, budget is {SHUTDOWN_DEADLINE_SECONDS}s"
+        )
     finally:
         if proc.poll() is None:
             proc.kill()

@@ -3,18 +3,18 @@
 from __future__ import annotations
 
 import base64
-from collections.abc import AsyncGenerator, Callable
-from http import HTTPStatus
 import json
 import os
 import random
 import time
+from collections.abc import AsyncGenerator, Callable
+from http import HTTPStatus
 from typing import TYPE_CHECKING, Any, Literal
 
+import numpy as np
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 from loguru import logger
-import numpy as np
 from openai.types.responses import FunctionTool
 from openai.types.responses.response_function_tool_call import ResponseFunctionToolCall
 from openai.types.responses.response_output_message import ResponseOutputMessage, ResponseOutputText
@@ -257,9 +257,7 @@ def _normalize_request_model(raw_request: Request, request: Any, handler: Any) -
     into the request so that response payloads (including stream
     chunks) carry the correct model identifier.
     """
-    if request.model == Config.TEXT_MODEL and "model" not in getattr(
-        request, "model_fields_set", set()
-    ):
+    if request.model == Config.TEXT_MODEL and "model" not in getattr(request, "model_fields_set", set()):
         # Preserve the historical OpenAI-compatible alias for omitted-model
         # requests. Single-model mode has long returned ``local-text-model``
         # in payloads, and multi-model compatibility fallbacks normalize via
@@ -359,9 +357,7 @@ async def health(raw_request: Request) -> HealthCheckResponse | JSONResponse:
     # Handler initialized - extract model_id
     model_id = getattr(handler, "model_path", "unknown")
 
-    return HealthCheckResponse(
-        status=HealthCheckStatus.OK, model_id=model_id, model_status="initialized"
-    )
+    return HealthCheckResponse(status=HealthCheckStatus.OK, model_id=model_id, model_status="initialized")
 
 
 @router.get("/v1/models", response_model=None)
@@ -502,21 +498,13 @@ def refine_chat_completion_request(
             handler, "default_temperature", "DEFAULT_TEMPERATURE", _parse_env_float
         )
     if request.top_p is None:
-        request.top_p = _get_sampling_default(
-            handler, "default_top_p", "DEFAULT_TOP_P", _parse_env_float
-        )
+        request.top_p = _get_sampling_default(handler, "default_top_p", "DEFAULT_TOP_P", _parse_env_float)
     if request.top_k is None:
-        request.top_k = _get_sampling_default(
-            handler, "default_top_k", "DEFAULT_TOP_K", _parse_env_int
-        )
+        request.top_k = _get_sampling_default(handler, "default_top_k", "DEFAULT_TOP_K", _parse_env_int)
     if request.min_p is None:
-        request.min_p = _get_sampling_default(
-            handler, "default_min_p", "DEFAULT_MIN_P", _parse_env_float
-        )
+        request.min_p = _get_sampling_default(handler, "default_min_p", "DEFAULT_MIN_P", _parse_env_float)
     if request.seed is None:
-        request.seed = _get_sampling_default(
-            handler, "default_seed", "DEFAULT_SEED", _parse_env_int
-        )
+        request.seed = _get_sampling_default(handler, "default_seed", "DEFAULT_SEED", _parse_env_int)
     if request.repetition_penalty is None:
         request.repetition_penalty = _get_sampling_default(
             handler,
@@ -611,24 +599,18 @@ async def chat_completions(
             )
 
         try:
-            return await process_text_request(
-                handler, request, request_id, raw_request=raw_request
-            )
+            return await process_text_request(handler, request, request_id, raw_request=raw_request)
         except HTTPException:
             raise
         except Exception as e:
             logger.exception(f"Error processing chat completion request: {type(e).__name__}: {e}")
-            return JSONResponse(
-                content=create_error_response(str(e)), status_code=HTTPStatus.INTERNAL_SERVER_ERROR
-            )
+            return JSONResponse(content=create_error_response(str(e)), status_code=HTTPStatus.INTERNAL_SERVER_ERROR)
     finally:
         await _release_on_demand(raw_request)
 
 
 @router.post("/v1/embeddings", response_model=None)
-async def embeddings(
-    request: EmbeddingRequest, raw_request: Request
-) -> EmbeddingResponse | JSONResponse:
+async def embeddings(request: EmbeddingRequest, raw_request: Request) -> EmbeddingResponse | JSONResponse:
     """Handle embedding requests."""
     handler = await _resolve_handler(raw_request, model_id=request.model)
     if handler is None:
@@ -666,16 +648,12 @@ async def embeddings(
             else:
                 embeddings = result
                 usage_dict = None
-            return create_response_embeddings(
-                embeddings, request.model, request.encoding_format, usage=usage_dict
-            )
+            return create_response_embeddings(embeddings, request.model, request.encoding_format, usage=usage_dict)
         except HTTPException:
             raise
         except Exception as e:
             logger.exception(f"Error processing embedding request: {type(e).__name__}: {e}")
-            return JSONResponse(
-                content=create_error_response(str(e)), status_code=HTTPStatus.INTERNAL_SERVER_ERROR
-            )
+            return JSONResponse(content=create_error_response(str(e)), status_code=HTTPStatus.INTERNAL_SERVER_ERROR)
     finally:
         await _release_on_demand(raw_request)
 
@@ -713,9 +691,7 @@ def create_response_embeddings(
             # Convert list/array to bytes before base64 encoding
             embedding_bytes = np.array(embedding, dtype=np.float32).tobytes()
             embeddings_response.append(
-                EmbeddingResponseData(
-                    embedding=base64.b64encode(embedding_bytes).decode("utf-8"), index=index
-                )
+                EmbeddingResponseData(embedding=base64.b64encode(embedding_bytes).decode("utf-8"), index=index)
             )
         else:
             embeddings_response.append(EmbeddingResponseData(embedding=embedding, index=index))
@@ -725,9 +701,7 @@ def create_response_embeddings(
             prompt_tokens=int(usage.get("prompt_tokens", 0)),
             total_tokens=int(usage.get("total_tokens", usage.get("prompt_tokens", 0))),
         )
-    return EmbeddingResponse(
-        object="list", data=embeddings_response, model=model, usage=usage_obj
-    )
+    return EmbeddingResponse(object="list", data=embeddings_response, model=model, usage=usage_obj)
 
 
 def create_response_chunk(
@@ -813,9 +787,7 @@ def create_response_chunk(
         # Validate index exists before accessing
         tool_index = chunk.get("index", 0)
         tool_call_id = chunk.get("id", get_tool_call_id())
-        tool_chunk = ChoiceDeltaToolCall(
-            index=tool_index, type="function", id=tool_call_id, function=function_call
-        )
+        tool_chunk = ChoiceDeltaToolCall(index=tool_index, type="function", id=tool_call_id, function=function_call)
 
         delta = Delta(content=None, role="assistant", tool_calls=[tool_chunk])  # type: ignore[call-arg]
     else:
@@ -884,10 +856,7 @@ async def handle_stream_response(
             # generator on the way out via the surrounding try/finally so the
             # handler subprocess receives _CANCEL promptly.
             if raw_request is not None and await raw_request.is_disconnected():
-                logger.debug(
-                    "client disconnected mid-stream; closing source generator "
-                    f"[request_id={request_id}]"
-                )
+                logger.debug(f"client disconnected mid-stream; closing source generator [request_id={request_id}]")
                 break
 
             if not chunk:
@@ -948,9 +917,7 @@ async def handle_stream_response(
         yield _yield_sse_chunk(error_response)
     except Exception as e:
         logger.exception(f"Error in stream wrapper: {type(e).__name__}: {e}")
-        error_response = create_error_response(
-            str(e), "server_error", HTTPStatus.INTERNAL_SERVER_ERROR
-        )
+        error_response = create_error_response(str(e), "server_error", HTTPStatus.INTERNAL_SERVER_ERROR)
         yield _yield_sse_chunk(error_response)
     finally:
         # Eagerly close the source generator so its `finally`/`aclose` runs.
@@ -976,9 +943,7 @@ async def handle_stream_response(
             created=created_time,
             model=model,
             choices=[StreamingChoice(index=0, delta=Delta(), finish_reason=finish_reason)],  # type: ignore[call-arg,arg-type]
-            usage=usage_info.model_dump()
-            if usage_info and hasattr(usage_info, "model_dump")
-            else None,
+            usage=usage_info.model_dump() if usage_info and hasattr(usage_info, "model_dump") else None,
             request_id=request_id,
         )
         yield _yield_sse_chunk(final_chunk)
@@ -1152,9 +1117,7 @@ def _serialize_responses_tool_output(output: Any) -> str:
         text_parts: list[str] = []
         for output_item in output:
             normalized = _normalize_responses_item(output_item)
-            if normalized.get("type") in {"input_text", "output_text", "text"} and normalized.get(
-                "text"
-            ):
+            if normalized.get("type") in {"input_text", "output_text", "text"} and normalized.get("text"):
                 text_parts.append(str(normalized["text"]))
         if text_parts:
             return "\n".join(text_parts)
@@ -1162,9 +1125,7 @@ def _serialize_responses_tool_output(output: Any) -> str:
     return json.dumps(output)
 
 
-def _convert_responses_content(
-    role: str, content: Any
-) -> str | list[ChatCompletionContentPartText]:
+def _convert_responses_content(role: str, content: Any) -> str | list[ChatCompletionContentPartText]:
     """Convert Responses message content into chat completion content (text only).
 
     Image / audio / video parts from the input are ignored at v0.1 since
@@ -1367,9 +1328,7 @@ def convert_responses_request_to_chat_request(request: ResponsesRequest) -> Chat
     def flush_pending_tool_calls() -> None:
         flush_pending_user_parts()
         if pending_tool_calls:
-            chat_messages.append(
-                Message(role="assistant", content="", tool_calls=list(pending_tool_calls))
-            )
+            chat_messages.append(Message(role="assistant", content="", tool_calls=list(pending_tool_calls)))
             pending_tool_calls.clear()
 
     if request.instructions:
@@ -1516,8 +1475,7 @@ def format_final_responses_response(
             input_tokens=input_tokens,
             input_tokens_details=InputTokensDetails(
                 cached_tokens=usage.prompt_tokens_details.cached_tokens
-                if usage.prompt_tokens_details
-                and usage.prompt_tokens_details.cached_tokens is not None
+                if usage.prompt_tokens_details and usage.prompt_tokens_details.cached_tokens is not None
                 else 0
             ),
             output_tokens=output_tokens,
@@ -1554,21 +1512,13 @@ def refine_responses_request(
             handler, "default_temperature", "DEFAULT_TEMPERATURE", _parse_env_float
         )
     if request.top_p is None:
-        request.top_p = _get_sampling_default(
-            handler, "default_top_p", "DEFAULT_TOP_P", _parse_env_float
-        )
+        request.top_p = _get_sampling_default(handler, "default_top_p", "DEFAULT_TOP_P", _parse_env_float)
     if request.top_k is None:
-        request.top_k = _get_sampling_default(
-            handler, "default_top_k", "DEFAULT_TOP_K", _parse_env_int
-        )
+        request.top_k = _get_sampling_default(handler, "default_top_k", "DEFAULT_TOP_K", _parse_env_int)
     if request.min_p is None:
-        request.min_p = _get_sampling_default(
-            handler, "default_min_p", "DEFAULT_MIN_P", _parse_env_float
-        )
+        request.min_p = _get_sampling_default(handler, "default_min_p", "DEFAULT_MIN_P", _parse_env_float)
     if request.seed is None:
-        request.seed = _get_sampling_default(
-            handler, "default_seed", "DEFAULT_SEED", _parse_env_int
-        )
+        request.seed = _get_sampling_default(handler, "default_seed", "DEFAULT_SEED", _parse_env_int)
     if request.repetition_penalty is None:
         request.repetition_penalty = _get_sampling_default(
             handler,
@@ -1617,23 +1567,17 @@ async def handle_responses_stream_response(  # noqa: C901
         sequence_number += 1
         return seq
 
-    def _create_base_response(
-        status: str, output: list[dict[str, Any]] | None = None
-    ) -> dict[str, Any]:
+    def _create_base_response(status: str, output: list[dict[str, Any]] | None = None) -> dict[str, Any]:
         if output is None:
             output = []
         reasoning_val = None
         if request.reasoning:
             reasoning_val = (
-                request.reasoning.model_dump()
-                if hasattr(request.reasoning, "model_dump")
-                else request.reasoning
+                request.reasoning.model_dump() if hasattr(request.reasoning, "model_dump") else request.reasoning
             )
         text_val = None
         if request.text:
-            text_val = (
-                request.text.model_dump() if hasattr(request.text, "model_dump") else request.text
-            )
+            text_val = request.text.model_dump() if hasattr(request.text, "model_dump") else request.text
         return {
             "id": resp_id,
             "created_at": created_time,
@@ -1885,8 +1829,7 @@ async def handle_responses_stream_response(  # noqa: C901
             output_tokens = usage_info.completion_tokens or 0
             cached_tokens = (
                 usage_info.prompt_tokens_details.cached_tokens
-                if usage_info.prompt_tokens_details
-                and usage_info.prompt_tokens_details.cached_tokens is not None
+                if usage_info.prompt_tokens_details and usage_info.prompt_tokens_details.cached_tokens is not None
                 else 0
             )
             final_response_obj["usage"] = {
@@ -2003,8 +1946,6 @@ async def responses_endpoint(
             raise
         except Exception as e:
             logger.exception(f"Error processing responses request: {type(e).__name__}: {e}")
-            return JSONResponse(
-                content=create_error_response(str(e)), status_code=HTTPStatus.INTERNAL_SERVER_ERROR
-            )
+            return JSONResponse(content=create_error_response(str(e)), status_code=HTTPStatus.INTERNAL_SERVER_ERROR)
     finally:
         await _release_on_demand(raw_request)

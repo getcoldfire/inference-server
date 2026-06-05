@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import AsyncGenerator, Callable, Generator
-from contextlib import nullcontext
 import queue
 import threading
+from collections.abc import AsyncGenerator, Callable, Generator
+from contextlib import nullcontext
 from threading import Thread
 from typing import Any
 
@@ -134,11 +134,11 @@ class InferenceWorker:
         try:
             self._work_queue.put_nowait(_work)
         except queue.Full:
-            raise asyncio.QueueFull("Inference queue is full")
+            raise asyncio.QueueFull("Inference queue is full") from None
         try:
             return await asyncio.wait_for(future, timeout=self._timeout)
         except TimeoutError:
-            raise TimeoutError(f"Inference timed out after {self._timeout}s")
+            raise TimeoutError(f"Inference timed out after {self._timeout}s") from None
 
     def submit_stream(
         self,
@@ -175,13 +175,11 @@ class InferenceWorker:
         try:
             self._work_queue.put_nowait(_work)
         except queue.Full:
-            raise asyncio.QueueFull("Inference queue is full")
+            raise asyncio.QueueFull("Inference queue is full") from None
         return self._read_stream(token_queue, cancel_event)
 
     @staticmethod
-    async def _read_stream(
-        q: asyncio.Queue[Any], cancel_event: threading.Event
-    ) -> AsyncGenerator[Any, None]:
+    async def _read_stream(q: asyncio.Queue[Any], cancel_event: threading.Event) -> AsyncGenerator[Any, None]:
         try:
             while True:
                 item = await q.get()

@@ -15,9 +15,9 @@
 # limitations under the License.
 """Extends `dill` to support pickling more types and produce more consistent dumps."""
 
+import sys
 from collections.abc import Callable, Iterable
 from io import BytesIO
-import sys
 from types import FunctionType
 from typing import TYPE_CHECKING, Any, BinaryIO, ClassVar
 

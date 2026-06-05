@@ -8,12 +8,12 @@ final-chunk stats) can be exercised without loading a real MLX model.
 from __future__ import annotations
 
 import asyncio
-from contextlib import contextmanager
-from dataclasses import dataclass, field
 import importlib
 import sys
 import threading
 import types
+from contextlib import contextmanager
+from dataclasses import dataclass, field
 from typing import Any
 
 import pytest
@@ -106,11 +106,7 @@ class FakeBatchGenerator:
     ) -> list[int]:
         uids: list[int] = []
         for _ in prompts:
-            script = (
-                self.script_queue.pop(0)
-                if self.script_queue
-                else _FakeScript(tokens=[0], finish_reason="length")
-            )
+            script = self.script_queue.pop(0) if self.script_queue else _FakeScript(tokens=[0], finish_reason="length")
             uid = self._uid_counter
             self._uid_counter += 1
             self._pending.append((uid, script, 0))
@@ -316,9 +312,7 @@ async def test_concurrent_requests_are_routed_by_uid(patched_scheduler):
 @pytest.mark.asyncio
 async def test_cancellation_removes_sequence_from_batch(patched_scheduler):
     """Closing the stream early should propagate a ``remove`` call."""
-    FakeBatchGenerator.script_queue = [
-        _FakeScript(tokens=list(range(50, 100)), finish_reason="length")
-    ]
+    FakeBatchGenerator.script_queue = [_FakeScript(tokens=list(range(50, 100)), finish_reason="length")]
     # Slow each generation step so the scheduler can't burn through all 50
     # tokens before the test has a chance to cancel.
     FakeBatchGenerator.step_delay = 0.01
@@ -538,9 +532,7 @@ async def test_admission_reclaims_lru_based_on_live_batch(patched_scheduler):
     finally:
         scheduler.stop()
 
-    assert 600 in lru.trim_calls, (
-        f"expected trim_to(n_bytes=600) after admission, got {lru.trim_calls}"
-    )
+    assert 600 in lru.trim_calls, f"expected trim_to(n_bytes=600) after admission, got {lru.trim_calls}"
 
 
 @pytest.mark.asyncio
@@ -601,11 +593,7 @@ async def test_exact_cache_hit_is_backed_off_before_kickoff_token(patched_schedu
             pass
 
     trimmed: list[int] = []
-    monkeypatch = (
-        patched_scheduler.pytest_monkeypatch
-        if hasattr(patched_scheduler, "pytest_monkeypatch")
-        else None
-    )
+    monkeypatch = patched_scheduler.pytest_monkeypatch if hasattr(patched_scheduler, "pytest_monkeypatch") else None
     if monkeypatch is None:
         pytest.skip("patched scheduler fixture does not expose monkeypatch")
 
@@ -657,11 +645,7 @@ async def test_exact_non_trimmable_cache_hit_falls_back_to_reprefill(patched_sch
         def trim_to(self, **_kwargs):
             pass
 
-    monkeypatch = (
-        patched_scheduler.pytest_monkeypatch
-        if hasattr(patched_scheduler, "pytest_monkeypatch")
-        else None
-    )
+    monkeypatch = patched_scheduler.pytest_monkeypatch if hasattr(patched_scheduler, "pytest_monkeypatch") else None
     if monkeypatch is None:
         pytest.skip("patched scheduler fixture does not expose monkeypatch")
 
@@ -715,11 +699,7 @@ async def test_exact_non_trimmable_cache_hit_logs_info(patched_scheduler):
         def trim_to(self, **_kwargs):
             pass
 
-    monkeypatch = (
-        patched_scheduler.pytest_monkeypatch
-        if hasattr(patched_scheduler, "pytest_monkeypatch")
-        else None
-    )
+    monkeypatch = patched_scheduler.pytest_monkeypatch if hasattr(patched_scheduler, "pytest_monkeypatch") else None
     if monkeypatch is None:
         pytest.skip("patched scheduler fixture does not expose monkeypatch")
 
@@ -740,8 +720,7 @@ async def test_exact_non_trimmable_cache_hit_logs_info(patched_scheduler):
         scheduler.stop()
 
     assert any(
-        "Discarding exact prompt-cache hit because it cannot be safely backed off by one token"
-        in message
+        "Discarding exact prompt-cache hit because it cannot be safely backed off by one token" in message
         and "prompt_tokens=3" in message
         for message in info_messages
     )

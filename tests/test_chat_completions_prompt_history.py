@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import asyncio
 import importlib
-from pathlib import Path
 import sys
 import types
+from pathlib import Path
 
 from app.schemas.openai import ChatCompletionRequest, FunctionCall, Message
 
@@ -30,9 +30,7 @@ def _load_mlx_lm_handler_class() -> type:
         "app.utils.prompt_cache",
         "app.handler.mlx_lm",
     ]
-    original_modules: dict[str, types.ModuleType | None] = {
-        name: sys.modules.get(name) for name in module_names
-    }
+    original_modules: dict[str, types.ModuleType | None] = {name: sys.modules.get(name) for name in module_names}
 
     try:
         sys.modules["app.handler"] = fake_handler_package

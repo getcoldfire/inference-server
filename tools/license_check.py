@@ -12,6 +12,7 @@ contributor's dev venv. We do not need them to be permissive. By default
 upstream `pip-licenses` inspects every installed package, which would
 spuriously block `codespell` and any other dev-only GPL tool.
 """
+
 from __future__ import annotations
 
 import json
@@ -88,10 +89,7 @@ def check_licenses(
                         package=name,
                         license=lic,
                         severity="blocked",
-                        message=(
-                            f"{name} {pkg['Version']} declares {lic} "
-                            f"(matches blocked {substr!r})"
-                        ),
+                        message=(f"{name} {pkg['Version']} declares {lic} (matches blocked {substr!r})"),
                     )
                 )
                 matched = True
@@ -104,8 +102,7 @@ def check_licenses(
                 license=lic,
                 severity="blocked",
                 message=(
-                    f"{name} {pkg['Version']} declares unknown license {lic!r}; "
-                    "add to allowed_licenses.json or replace"
+                    f"{name} {pkg['Version']} declares unknown license {lic!r}; add to allowed_licenses.json or replace"
                 ),
             )
         )
@@ -121,6 +118,7 @@ def runtime_closure(pyproject_path: Path) -> set[str]:
     `pip-licenses` output.
     """
     from importlib import metadata
+
     from packaging.requirements import Requirement
 
     data = tomllib.loads(pyproject_path.read_text())
@@ -161,9 +159,7 @@ def main() -> None:
     repo_root = Path(__file__).resolve().parent.parent
     pyproject = repo_root / "pyproject.toml"
     allowed = json.loads((repo_root / "tools" / "allowed_licenses.json").read_text())
-    overrides = json.loads(
-        (repo_root / "tools" / "license_overrides.json").read_text()
-    )["overrides"]
+    overrides = json.loads((repo_root / "tools" / "license_overrides.json").read_text())["overrides"]
 
     closure = runtime_closure(pyproject)
 
@@ -177,11 +173,7 @@ def main() -> None:
     all_packages = json.loads(raw)
 
     # Filter to the runtime closure. Match on normalized name.
-    runtime_packages = [
-        p
-        for p in all_packages
-        if p["Name"].lower().replace("_", "-") in closure
-    ]
+    runtime_packages = [p for p in all_packages if p["Name"].lower().replace("_", "-") in closure]
 
     # If a runtime package isn't shown by pip-licenses, it's not installed —
     # surface that as an error so we don't silently skip auditing it.
@@ -203,10 +195,7 @@ def main() -> None:
             print(f"  [{v.severity.upper()}] {v.message}")
         print("\nSee docs/LICENSING.md for the project's license policy.")
         sys.exit(1)
-    print(
-        f"License audit passed: {len(runtime_packages)} runtime packages checked, "
-        "all permissive."
-    )
+    print(f"License audit passed: {len(runtime_packages)} runtime packages checked, all permissive.")
 
 
 if __name__ == "__main__":

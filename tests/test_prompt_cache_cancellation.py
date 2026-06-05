@@ -3,17 +3,17 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import AsyncGenerator
-from contextlib import suppress
 import importlib
-from pathlib import Path
 import sys
 import types
+from collections.abc import AsyncGenerator
+from contextlib import suppress
+from pathlib import Path
 from typing import Any
 from unittest.mock import AsyncMock, Mock, patch
 
-from fastapi import HTTPException
 import pytest
+from fastapi import HTTPException
 
 
 def _install_fake_mlx_cache_module(monkeypatch: pytest.MonkeyPatch) -> None:

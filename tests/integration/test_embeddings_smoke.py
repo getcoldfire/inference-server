@@ -16,14 +16,10 @@ Two tests:
 from __future__ import annotations
 
 import os
-import signal
-import socket
 import subprocess
 import sys
-import time
 from collections.abc import Iterator
 from pathlib import Path
-from typing import Callable
 
 import httpx
 import pytest
@@ -112,7 +108,7 @@ def test_embeddings_tiny_bert_smoke(tiny_bert_server: str) -> None:
         assert vec is not None, f"missing 'embedding' on item {i}: {entry}"
         assert len(vec) == 32, f"item {i}: expected 32-dim, got {len(vec)}"
         norm_sq = sum(x * x for x in vec)
-        norm = norm_sq ** 0.5
+        norm = norm_sq**0.5
         assert abs(norm - 1.0) < 1e-4, f"item {i}: L2 norm {norm} != 1.0"
 
 
@@ -121,9 +117,7 @@ def test_embeddings_tiny_bert_smoke(tiny_bert_server: str) -> None:
 @pytest.mark.integration
 def test_embeddings_nomic_v1_5_smoke() -> None:
     """``/v1/embeddings`` against real nomic-embed-text-v1.5: 768-dim L2-norm."""
-    port = _free_port()
     proc, port_back = _boot_server(EMBEDDING_MODEL_ID, model_type="embeddings")
-    assert port_back == port_back  # silence unused
     try:
         ready = _wait_for_healthz(port_back, proc, timeout=300.0)
         if not ready:
@@ -132,9 +126,7 @@ def test_embeddings_nomic_v1_5_smoke() -> None:
             except subprocess.TimeoutExpired:
                 proc.kill()
                 out, _ = proc.communicate()
-            pytest.fail(
-                f"nomic-embed server never became ready on :{port_back}.\nOutput:\n{out}"
-            )
+            pytest.fail(f"nomic-embed server never became ready on :{port_back}.\nOutput:\n{out}")
 
         r = httpx.post(
             f"http://127.0.0.1:{port_back}/v1/embeddings",

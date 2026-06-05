@@ -6,6 +6,7 @@ tokenizer_config.json, 1_Pooling/config.json, special_tokens_map.json, vocab.txt
 
 Deterministic via seeded numpy RNG. Safe to re-run; will overwrite.
 """
+
 import json
 from pathlib import Path
 
@@ -39,7 +40,7 @@ H = config["hidden_size"]
 V = config["vocab_size"]
 P = config["max_position_embeddings"]
 TT = config["type_vocab_size"]
-I = config["intermediate_size"]
+IS = config["intermediate_size"]
 
 weights["embeddings.word_embeddings.weight"] = rng.normal(0, 0.02, (V, H)).astype(np.float32)
 weights["embeddings.position_embeddings.weight"] = rng.normal(0, 0.02, (P, H)).astype(np.float32)
@@ -56,9 +57,9 @@ for layer in range(config["num_hidden_layers"]):
     weights[f"{p}.attention.output.dense.bias"] = np.zeros(H, dtype=np.float32)
     weights[f"{p}.attention.output.LayerNorm.weight"] = np.ones(H, dtype=np.float32)
     weights[f"{p}.attention.output.LayerNorm.bias"] = np.zeros(H, dtype=np.float32)
-    weights[f"{p}.intermediate.dense.weight"] = rng.normal(0, 0.02, (I, H)).astype(np.float32)
-    weights[f"{p}.intermediate.dense.bias"] = np.zeros(I, dtype=np.float32)
-    weights[f"{p}.output.dense.weight"] = rng.normal(0, 0.02, (H, I)).astype(np.float32)
+    weights[f"{p}.intermediate.dense.weight"] = rng.normal(0, 0.02, (IS, H)).astype(np.float32)
+    weights[f"{p}.intermediate.dense.bias"] = np.zeros(IS, dtype=np.float32)
+    weights[f"{p}.output.dense.weight"] = rng.normal(0, 0.02, (H, IS)).astype(np.float32)
     weights[f"{p}.output.dense.bias"] = np.zeros(H, dtype=np.float32)
     weights[f"{p}.output.LayerNorm.weight"] = np.ones(H, dtype=np.float32)
     weights[f"{p}.output.LayerNorm.bias"] = np.zeros(H, dtype=np.float32)
@@ -101,22 +102,32 @@ tokenizer_config = {
 }
 (DIR / "tokenizer_config.json").write_text(json.dumps(tokenizer_config, indent=2))
 
-(DIR / "special_tokens_map.json").write_text(json.dumps({
-    "unk_token": "[UNK]",
-    "sep_token": "[SEP]",
-    "pad_token": "[PAD]",
-    "cls_token": "[CLS]",
-    "mask_token": "[MASK]",
-}, indent=2))
+(DIR / "special_tokens_map.json").write_text(
+    json.dumps(
+        {
+            "unk_token": "[UNK]",
+            "sep_token": "[SEP]",
+            "pad_token": "[PAD]",
+            "cls_token": "[CLS]",
+            "mask_token": "[MASK]",
+        },
+        indent=2,
+    )
+)
 
 # Sentence-Transformers-style pooling config
 (DIR / "1_Pooling").mkdir(exist_ok=True)
-(DIR / "1_Pooling" / "config.json").write_text(json.dumps({
-    "word_embedding_dimension": H,
-    "pooling_mode_cls_token": False,
-    "pooling_mode_mean_tokens": True,
-    "pooling_mode_max_tokens": False,
-    "pooling_mode_mean_sqrt_len_tokens": False,
-}, indent=2))
+(DIR / "1_Pooling" / "config.json").write_text(
+    json.dumps(
+        {
+            "word_embedding_dimension": H,
+            "pooling_mode_cls_token": False,
+            "pooling_mode_mean_tokens": True,
+            "pooling_mode_max_tokens": False,
+            "pooling_mode_mean_sqrt_len_tokens": False,
+        },
+        indent=2,
+    )
+)
 
 print(f"Fixture written to {DIR}")

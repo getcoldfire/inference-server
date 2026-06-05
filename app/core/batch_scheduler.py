@@ -19,17 +19,17 @@ decoding continue to work while batching.
 from __future__ import annotations
 
 import asyncio
-from collections.abc import AsyncGenerator, Callable
-from contextlib import nullcontext
-from dataclasses import dataclass
 import inspect
 import queue
 import threading
 import time
+from collections.abc import AsyncGenerator, Callable
+from contextlib import nullcontext
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
-from loguru import logger
 import mlx.core as mx
+from loguru import logger
 
 if TYPE_CHECKING:
     from mlx_lm.tokenizer_utils import TokenizerWrapper
@@ -44,9 +44,7 @@ try:
     # We feature-detect it so the scheduler can forward its own thread-local
     # stream automatically once the installed mlx-lm ships that change —
     # older versions fall back to BatchGenerator's module-level stream.
-    _BATCH_GENERATOR_ACCEPTS_STREAM = (
-        "stream" in inspect.signature(BatchGenerator.__init__).parameters
-    )
+    _BATCH_GENERATOR_ACCEPTS_STREAM = "stream" in inspect.signature(BatchGenerator.__init__).parameters
 except ImportError:  # pragma: no cover — only exercised on older mlx-lm pins
     BatchGenerator = None  # type: ignore[assignment,misc]
     SequenceStateMachine = None  # type: ignore[assignment,misc]
@@ -296,15 +294,11 @@ class BatchScheduler:
             try:
                 self._warm_up_model()
             except Exception as exc:  # noqa: BLE001 — surface to caller
-                raise RuntimeError(
-                    f"BatchScheduler warm-up forward pass failed: {exc!s}"
-                ) from exc
+                raise RuntimeError(f"BatchScheduler warm-up forward pass failed: {exc!s}") from exc
             self._ready_event.clear()
             self._start_error = None
             self._running = True
-            self._thread = threading.Thread(
-                target=self._run, daemon=True, name="mlx-batch-scheduler"
-            )
+            self._thread = threading.Thread(target=self._run, daemon=True, name="mlx-batch-scheduler")
             self._thread.start()
         # Wait for the worker thread to finish constructing the BatchGenerator
         # so start() surfaces init errors synchronously rather than deferring
@@ -401,14 +395,8 @@ class BatchScheduler:
             An async generator yielding incremental chunks; the final chunk
             has ``finish_reason`` set.
         """
-        if (
-            segments is not None
-            and segment_types is not None
-            and len(segments) != len(segment_types)
-        ):
-            raise ValueError(
-                f"segments / segment_types length mismatch: {len(segments)} vs {len(segment_types)}"
-            )
+        if segments is not None and segment_types is not None and len(segments) != len(segment_types):
+            raise ValueError(f"segments / segment_types length mismatch: {len(segments)} vs {len(segment_types)}")
         if not input_ids:
             raise ValueError("input_ids must contain at least one token for batch generation")
 
@@ -472,18 +460,13 @@ class BatchScheduler:
         try:
             from mlx_lm.models.cache import make_prompt_cache  # noqa: PLC0415
         except ImportError:  # pragma: no cover — only on broken mlx-lm install
-            logger.warning(
-                "BatchScheduler warm-up skipped: mlx_lm.models.cache unavailable"
-            )
+            logger.warning("BatchScheduler warm-up skipped: mlx_lm.models.cache unavailable")
             return
 
         # Mock/stub models used by unit tests don't conform to the mlx-lm
         # nn.Module shape. Skip the warm-up rather than fail.
         if not hasattr(self._model, "layers"):
-            logger.debug(
-                "BatchScheduler warm-up skipped: model has no .layers attribute"
-                " (likely a test stub)"
-            )
+            logger.debug("BatchScheduler warm-up skipped: model has no .layers attribute (likely a test stub)")
             return
 
         # Pick a safe single token. ``bos_token_id`` is the natural choice; if
@@ -550,9 +533,7 @@ class BatchScheduler:
 
         try:
             while self._running:
-                lock_context = (
-                    self._generation_lock if self._generation_lock is not None else nullcontext()
-                )
+                lock_context = self._generation_lock if self._generation_lock is not None else nullcontext()
                 # Pin the entire iteration to ``self._stream``. Every MLX
                 # array created or evaluated inside this block — including
                 # the prompt cache scaffolding allocated by
@@ -711,11 +692,7 @@ class BatchScheduler:
                     caches=[cache_from_lru] if cache_from_lru is not None else None,
                     all_tokens=[request.input_ids[:cached_prefix_len]],
                     samplers=[request.sampler] if request.sampler is not None else None,
-                    logits_processors=(
-                        [request.logits_processors]
-                        if request.logits_processors is not None
-                        else None
-                    ),
+                    logits_processors=([request.logits_processors] if request.logits_processors is not None else None),
                     state_machines=[request.state_machine],
                 )
             except Exception as exc:  # noqa: BLE001 — report per-request
@@ -764,11 +741,7 @@ class BatchScheduler:
         if len(input_ids) <= 1:
             return None, 0
 
-        if (
-            can_trim_prompt_cache is not None
-            and trim_prompt_cache is not None
-            and can_trim_prompt_cache(prompt_cache)
-        ):
+        if can_trim_prompt_cache is not None and trim_prompt_cache is not None and can_trim_prompt_cache(prompt_cache):
             trim_prompt_cache(prompt_cache, 1)
             return prompt_cache, len(input_ids) - 1
 
@@ -873,14 +846,9 @@ class BatchScheduler:
                     cache_type=cache_type,
                     source="batch",
                 )
-                logger.debug(
-                    f"BatchScheduler saved {cache_type} checkpoint for uid={uid}"
-                    f" (key_len={len(cache_key)})"
-                )
+                logger.debug(f"BatchScheduler saved {cache_type} checkpoint for uid={uid} (key_len={len(cache_key)})")
             except Exception as exc:  # noqa: BLE001 — cache save is best-effort
-                logger.warning(
-                    f"prompt_cache.insert_cache ({cache_type}) failed for uid={uid}: {exc!s}"
-                )
+                logger.warning(f"prompt_cache.insert_cache ({cache_type}) failed for uid={uid}: {exc!s}")
 
     def _handle_generation_response(self, resp: Any) -> None:
         """Forward a single generation-batch response to the owning request."""
@@ -959,9 +927,7 @@ class BatchScheduler:
                         )
                         saved = True
                     except Exception as exc:  # noqa: BLE001 — cache save is best-effort
-                        logger.warning(
-                            f"prompt_cache.insert_cache failed for uid={resp.uid}: {exc!s}"
-                        )
+                        logger.warning(f"prompt_cache.insert_cache failed for uid={resp.uid}: {exc!s}")
             logger.info(
                 f"BatchScheduler uid={resp.uid} finished "
                 f"(finish_reason={chunk_finish}, "

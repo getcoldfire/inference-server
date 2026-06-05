@@ -24,21 +24,20 @@ Run multi-handler mode from YAML config:
 from __future__ import annotations
 
 import asyncio
-from dataclasses import MISSING, fields
 import multiprocessing as mp
 import os
 import signal
 import sys
 import threading
 import time
+from dataclasses import MISSING, fields
 
-from loguru import logger
 import uvicorn
+from loguru import logger
 
 from .config import MLXServerConfig, ModelEntryConfig, MultiModelServerConfig
 from .server import setup_server
 from .version import __version__
-
 
 # Total wall-clock budget (seconds) from first SIGTERM/SIGINT until process exit.
 # Per the cli-v2 contract: SIGTERM must produce exit code 0 within 5 seconds.
@@ -107,9 +106,7 @@ def print_startup_banner(config_args: MLXServerConfig) -> None:
             logger.info(f"🔧 Message Converter: {config_args.message_converter}")
     if config_args.model_type == "lm":
         logger.info(f"💾 Prompt Cache Size: {config_args.prompt_cache_size} entries")
-        logger.info(
-            f"💾 Prompt Cache Max Bytes: {_format_bytes(config_args.prompt_cache_max_bytes)}"
-        )
+        logger.info(f"💾 Prompt Cache Max Bytes: {_format_bytes(config_args.prompt_cache_max_bytes)}")
         if getattr(config_args, "prompt_cache_dir", None):
             logger.info(f"💾 Prompt Cache Dir: {config_args.prompt_cache_dir}")
         if config_args.disable_batching:
@@ -160,27 +157,16 @@ def _model_entry_extras(m: ModelEntryConfig) -> list[tuple[str, object]]:
         extras.append(("draft_model_path", m.draft_model_path))
         extras.append(("num_draft_tokens", m.num_draft_tokens))
     if m.kv_bits is not None:
-        extras.append(
-            ("kv_bits", f"{m.kv_bits} (group={m.kv_group_size}, start={m.quantized_kv_start})")
-        )
+        extras.append(("kv_bits", f"{m.kv_bits} (group={m.kv_group_size}, start={m.quantized_kv_start})"))
     if m.model_type == "lm":
         batch_settings: list[str] = []
         if m.disable_batching:
             batch_settings.append("disabled")
-        if (
-            not m.disable_batching
-            and m.batch_completion_size != _MODEL_ENTRY_DEFAULTS["batch_completion_size"]
-        ):
+        if not m.disable_batching and m.batch_completion_size != _MODEL_ENTRY_DEFAULTS["batch_completion_size"]:
             batch_settings.append(f"decode={m.batch_completion_size}")
-        if (
-            not m.disable_batching
-            and m.batch_prefill_size != _MODEL_ENTRY_DEFAULTS["batch_prefill_size"]
-        ):
+        if not m.disable_batching and m.batch_prefill_size != _MODEL_ENTRY_DEFAULTS["batch_prefill_size"]:
             batch_settings.append(f"prefill={m.batch_prefill_size}")
-        if (
-            not m.disable_batching
-            and m.batch_prefill_step_size != _MODEL_ENTRY_DEFAULTS["batch_prefill_step_size"]
-        ):
+        if not m.disable_batching and m.batch_prefill_step_size != _MODEL_ENTRY_DEFAULTS["batch_prefill_step_size"]:
             batch_settings.append(f"prefill_step={m.batch_prefill_step_size}")
         if batch_settings:
             extras.append(("batch_scheduler", ", ".join(batch_settings)))
@@ -287,8 +273,7 @@ def _arm_shutdown_watchdog(server: uvicorn.Server) -> threading.Event:
         # asked us to stop; exceeding the soft drain budget is not a failure
         # mode the caller cares about.
         logger.warning(
-            f"Shutdown exceeded {SHUTDOWN_DEADLINE_SECONDS}s budget; "
-            "force-killing handler subprocesses and exiting."
+            f"Shutdown exceeded {SHUTDOWN_DEADLINE_SECONDS}s budget; force-killing handler subprocesses and exiting."
         )
         _force_kill_children()
         os._exit(0)

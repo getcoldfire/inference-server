@@ -79,10 +79,7 @@ def test_harmony_non_streaming_parse() -> None:
     assert result is not None
     assert "reasoning_content" in result
     assert result["reasoning_content"] is not None
-    assert (
-        "need" in result["reasoning_content"].lower()
-        or "call" in result["reasoning_content"].lower()
-    )
+    assert "need" in result["reasoning_content"].lower() or "call" in result["reasoning_content"].lower()
 
     # Verify tool calls
     assert "tool_calls" in result

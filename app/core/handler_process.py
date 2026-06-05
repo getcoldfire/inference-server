@@ -32,16 +32,16 @@ the ``resource_tracker`` semaphore leak warning on macOS).
 from __future__ import annotations
 
 import asyncio
-from collections.abc import AsyncGenerator, Callable
-from contextlib import suppress
 import multiprocessing as mp
 import os
 import queue
 import threading
 import time
 import traceback
-from typing import Any
 import uuid
+from collections.abc import AsyncGenerator, Callable
+from contextlib import suppress
+from typing import Any
 
 from loguru import logger
 
@@ -79,13 +79,11 @@ async def _dispatch_non_stream_request(
         method = getattr(handler, method_name)
         result = await method(*args, **kwargs)
         response_queue.put({"id": req_id, "type": "result", "value": result})
-    except (TimeoutError, asyncio.TimeoutError) as exc:
+    except TimeoutError as exc:
         # Upstream #307: a request that times out is NOT a subprocess crash.
         # Report 504 so callers (cli-v2 lifecycle, gateways) treat it as a
         # retriable upstream timeout, not an opaque 500 panic.
-        logger.warning(
-            f"Request {req_id} (method={method_name}) timed out: {exc}"
-        )
+        logger.warning(f"Request {req_id} (method={method_name}) timed out: {exc}")
         response_queue.put(
             {
                 "id": req_id,
@@ -127,9 +125,7 @@ async def _handle_request_for_test(
     method_name = request.get("method", "")
     args = request.get("args", ())
     kwargs = request.get("kwargs", {})
-    await _dispatch_non_stream_request(
-        handler, response_queue, req_id, method_name, args, kwargs
-    )
+    await _dispatch_non_stream_request(handler, response_queue, req_id, method_name, args, kwargs)
 
 
 async def _stream_until_cancelled(
@@ -329,8 +325,8 @@ def _handler_worker(
     import asyncio
     import gc
 
-    from loguru import logger
     import mlx.core as mx
+    from loguru import logger
 
     from app.config import ModelEntryConfig
     from app.server import create_handler_from_config
@@ -432,12 +428,9 @@ def _handler_worker(
                     response_queue.put({"id": req_id, "type": _STREAM_END})
                     with _cancelled_lock:
                         _cancelled_ids.discard(req_id)
-                except (TimeoutError, asyncio.TimeoutError) as exc:
+                except TimeoutError as exc:
                     # Upstream #307: see _dispatch_non_stream_request docstring.
-                    logger.warning(
-                        f"Streaming request {req_id} (method={method_name}) "
-                        f"timed out: {exc}"
-                    )
+                    logger.warning(f"Streaming request {req_id} (method={method_name}) timed out: {exc}")
                     response_queue.put(
                         {
                             "id": req_id,
@@ -450,10 +443,7 @@ def _handler_worker(
                     )
                 except Exception as exc:
                     tb = traceback.format_exc()
-                    logger.error(
-                        f"Error handling streaming request {req_id} "
-                        f"(method={method_name}): {exc}\n{tb}"
-                    )
+                    logger.error(f"Error handling streaming request {req_id} (method={method_name}): {exc}\n{tb}")
                     response_queue.put(
                         {
                             "id": req_id,
@@ -468,9 +458,7 @@ def _handler_worker(
                 # Non-streaming dispatch is delegated to a module-level helper
                 # so the (upstream #307) TimeoutError -> 504 mapping is
                 # unit-testable without spawning a subprocess.
-                await _dispatch_non_stream_request(
-                    handler, response_queue, req_id, method_name, args, kwargs
-                )
+                await _dispatch_non_stream_request(handler, response_queue, req_id, method_name, args, kwargs)
 
         # ------------------------------------------------------------------
         # Request loop — pulls messages from the (blocking) mp.Queue and
@@ -495,8 +483,7 @@ def _handler_worker(
                     os.kill(_parent_pid, 0)
                 except (ProcessLookupError, PermissionError):
                     logger.warning(
-                        f"Parent process (pid={_parent_pid}) exited; "
-                        f"handler subprocess for '{model_id}' shutting down"
+                        f"Parent process (pid={_parent_pid}) exited; handler subprocess for '{model_id}' shutting down"
                     )
                     break
                 continue
@@ -507,9 +494,7 @@ def _handler_worker(
             # Shutdown signal
             if method_name == _SHUTDOWN:
                 if _inflight:
-                    logger.info(
-                        f"Shutdown requested; waiting for {len(_inflight)} in-flight request(s) to finish"
-                    )
+                    logger.info(f"Shutdown requested; waiting for {len(_inflight)} in-flight request(s) to finish")
                     await asyncio.gather(*_inflight, return_exceptions=True)
                 try:
                     await handler.cleanup()
@@ -677,9 +662,7 @@ class HandlerProcessProxy:
             name=f"handler-{self.served_model_name}",
         )
         self._process.start()
-        logger.info(
-            f"Spawned handler process for '{self.served_model_name}' (pid={self._process.pid})"
-        )
+        logger.info(f"Spawned handler process for '{self.served_model_name}' (pid={self._process.pid})")
 
         # Wait for the ready signal.
         ready_queue: asyncio.Queue[dict[str, Any]] = asyncio.Queue()
@@ -693,9 +676,7 @@ class HandlerProcessProxy:
 
             if not response.get("success"):
                 error_msg = response.get("error", "unknown error")
-                raise RuntimeError(
-                    f"Handler process for '{self.served_model_name}' failed to initialize: {error_msg}"
-                )
+                raise RuntimeError(f"Handler process for '{self.served_model_name}' failed to initialize: {error_msg}")
         except Exception:
             try:
                 await self.cleanup()
@@ -743,8 +724,7 @@ class HandlerProcessProxy:
             remaining = deadline - time.monotonic()
             if remaining <= 0:
                 raise RuntimeError(
-                    f"Handler process for '{self.served_model_name}' "
-                    f"did not become ready within {timeout:.0f} s"
+                    f"Handler process for '{self.served_model_name}' did not become ready within {timeout:.0f} s"
                 )
 
             try:
@@ -759,7 +739,7 @@ class HandlerProcessProxy:
                     raise RuntimeError(
                         f"Handler process for '{self.served_model_name}' "
                         f"died during initialization (exit code {exit_code})"
-                    )
+                    ) from None
                 # Still alive — keep waiting.
                 continue
 
@@ -805,14 +785,12 @@ class HandlerProcessProxy:
 
             if not self._queue_config:
                 raise RuntimeError(
-                    f"Handler process for '{self.served_model_name}' is dead "
-                    "and cannot be restarted (never started)"
+                    f"Handler process for '{self.served_model_name}' is dead and cannot be restarted (never started)"
                 )
 
             exit_code = self._process.exitcode if self._process else None
             logger.warning(
-                f"Handler process for '{self.served_model_name}' is dead "
-                f"(exit code {exit_code}); attempting restart"
+                f"Handler process for '{self.served_model_name}' is dead (exit code {exit_code}); attempting restart"
             )
 
             last_error: Exception | None = None
@@ -820,8 +798,7 @@ class HandlerProcessProxy:
                 try:
                     await self._restart()
                     logger.info(
-                        f"Handler process for '{self.served_model_name}' "
-                        f"restarted successfully (attempt {attempt})"
+                        f"Handler process for '{self.served_model_name}' restarted successfully (attempt {attempt})"
                     )
                     return
                 except Exception as exc:
@@ -897,9 +874,7 @@ class HandlerProcessProxy:
             name=f"handler-{self.served_model_name}",
         )
         self._process.start()
-        logger.info(
-            f"Respawned handler process for '{self.served_model_name}' (pid={self._process.pid})"
-        )
+        logger.info(f"Respawned handler process for '{self.served_model_name}' (pid={self._process.pid})")
 
         ready_queue: asyncio.Queue[dict[str, Any]] = asyncio.Queue()
         self._pending["__ready__"] = ready_queue
@@ -912,8 +887,7 @@ class HandlerProcessProxy:
         if not response.get("success"):
             error_msg = response.get("error", "unknown error")
             raise RuntimeError(
-                f"Handler process for '{self.served_model_name}' "
-                f"failed to initialize on restart: {error_msg}"
+                f"Handler process for '{self.served_model_name}' failed to initialize on restart: {error_msg}"
             )
 
         self.model_created = int(time.time())
@@ -1013,9 +987,7 @@ class HandlerProcessProxy:
         finally:
             self._pending.pop(req_id, None)
 
-    async def _call_stream(
-        self, method_name: str, *args: Any, **kwargs: Any
-    ) -> AsyncGenerator[Any, None]:
+    async def _call_stream(self, method_name: str, *args: Any, **kwargs: Any) -> AsyncGenerator[Any, None]:
         """Send a streaming RPC call and yield chunks from the child.
 
         Parameters
@@ -1096,9 +1068,7 @@ class HandlerProcessProxy:
         from fastapi import HTTPException
 
         status_code = response.get("status_code", 500)
-        detail = response.get("detail") or response.get(
-            "message", "Unknown error in handler subprocess"
-        )
+        detail = response.get("detail") or response.get("message", "Unknown error in handler subprocess")
         error_type = response.get("error_type", "Exception")
         message = response.get("message", "")
 

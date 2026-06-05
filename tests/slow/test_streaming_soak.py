@@ -67,16 +67,12 @@ async def test_one_hour_streaming_soak(chat_server: tuple[str, int]) -> None:
                 f"{base_url}/v1/chat/completions",
                 json={
                     "model": CHAT_MODEL_ID,
-                    "messages": [
-                        {"role": "user", "content": "Tell a 100-word story."}
-                    ],
+                    "messages": [{"role": "user", "content": "Tell a 100-word story."}],
                     "max_tokens": 150,
                     "stream": True,
                 },
             ) as r:
-                assert r.status_code == 200, (
-                    f"non-200 during soak after {requests_made} requests: {r.status_code}"
-                )
+                assert r.status_code == 200, f"non-200 during soak after {requests_made} requests: {r.status_code}"
                 async for _ in r.aiter_lines():
                     pass
             requests_made += 1
@@ -98,6 +94,4 @@ async def test_one_hour_streaming_soak(chat_server: tuple[str, int]) -> None:
     # Initial calibration ceiling — tighten to ~50 MB once a real baseline run
     # has been observed. The point of this test is to catch unbounded growth,
     # not to enforce tight memory budgets.
-    assert rss_growth_mb < 200, (
-        f"memory leak suspected: RSS grew {rss_growth_mb:.1f} MB during 1h soak"
-    )
+    assert rss_growth_mb < 200, f"memory leak suspected: RSS grew {rss_growth_mb:.1f} MB during 1h soak"

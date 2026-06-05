@@ -47,9 +47,7 @@ class HarmonyParser:
             "reasoning_content": None,
         }
         tokens = self.encoding.encode(text, allowed_special="all")
-        parsed_messages = self.encoding.parse_messages_from_completion_tokens(
-            tokens, role=Role.ASSISTANT
-        )
+        parsed_messages = self.encoding.parse_messages_from_completion_tokens(tokens, role=Role.ASSISTANT)
         for message in parsed_messages:
             if message.channel == ChannelType.ANALYSIS.value:
                 result["reasoning_content"] = message.content[0].text
@@ -119,9 +117,7 @@ class HarmonyParser:
 
         # Handle end of stream
         if end_stream_state:
-            tool_calls = [
-                {"name": self.function_name_buffer, "arguments": "".join(self.arguments_buffer)}
-            ]
+            tool_calls = [{"name": self.function_name_buffer, "arguments": "".join(self.arguments_buffer)}]
             self.arguments_buffer = []
             self.function_name_buffer = ""
             self.state = ToolParserState.END_STREAM

@@ -9,8 +9,8 @@ import sys
 import types
 from typing import Any
 
-from click.testing import CliRunner
 import pytest
+from click.testing import CliRunner
 
 from app.config import MLXServerConfig, ModelEntryConfig
 

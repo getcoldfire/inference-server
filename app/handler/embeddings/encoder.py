@@ -33,10 +33,10 @@ Per `hidden_act`:
 `token_type_ids` may be `None`; the embedding contribution is skipped when the
 config has `type_vocab_size == 0` (as in nomic-bert).
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass, fields
-from typing import Optional
 
 import mlx.core as mx
 import mlx.nn as nn
@@ -60,10 +60,10 @@ class BertConfig:
     position_embedding_type: str = "absolute"
     layer_norm_eps: float = 1e-12
     rope_theta: float = 10000.0
-    matryoshka_dim: Optional[int] = None
+    matryoshka_dim: int | None = None
 
     @classmethod
-    def from_dict(cls, d: dict) -> "BertConfig":
+    def from_dict(cls, d: dict) -> BertConfig:
         known = {f.name for f in fields(cls)}
         return cls(**{k: v for k, v in d.items() if k in known})
 
@@ -88,19 +88,15 @@ class BertEmbeddings(nn.Module):
         self.config = config
         self.word_embeddings = nn.Embedding(config.vocab_size, config.hidden_size)
         if config.position_embedding_type == "absolute":
-            self.position_embeddings = nn.Embedding(
-                config.max_position_embeddings, config.hidden_size
-            )
+            self.position_embeddings = nn.Embedding(config.max_position_embeddings, config.hidden_size)
         if config.type_vocab_size > 0:
-            self.token_type_embeddings = nn.Embedding(
-                config.type_vocab_size, config.hidden_size
-            )
+            self.token_type_embeddings = nn.Embedding(config.type_vocab_size, config.hidden_size)
         self.LayerNorm = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
 
     def __call__(
         self,
         input_ids: mx.array,
-        token_type_ids: Optional[mx.array],
+        token_type_ids: mx.array | None,
     ) -> mx.array:
         x = self.word_embeddings(input_ids)
         if self.config.position_embedding_type == "absolute":
@@ -131,7 +127,7 @@ class BertSelfAttention(nn.Module):
         self.key = nn.Linear(config.hidden_size, config.hidden_size)
         self.value = nn.Linear(config.hidden_size, config.hidden_size)
 
-    def __call__(self, x: mx.array, attention_mask: Optional[mx.array]) -> mx.array:
+    def __call__(self, x: mx.array, attention_mask: mx.array | None) -> mx.array:
         B, T, _ = x.shape
         q = self.query(x).reshape(B, T, self.num_heads, self.head_dim).transpose(0, 2, 1, 3)
         k = self.key(x).reshape(B, T, self.num_heads, self.head_dim).transpose(0, 2, 1, 3)
@@ -176,7 +172,7 @@ class BertAttention(nn.Module):
         self.self = BertSelfAttention(config)
         self.output = BertSelfOutput(config)
 
-    def __call__(self, x: mx.array, attention_mask: Optional[mx.array]) -> mx.array:
+    def __call__(self, x: mx.array, attention_mask: mx.array | None) -> mx.array:
         attn_out = self.self(x, attention_mask)
         return self.output(attn_out, x)
 
@@ -274,7 +270,7 @@ class BertLayer(nn.Module):
             self.intermediate = _IntermediateBlock(config)
             self.output = _OutputBlock(config)
 
-    def __call__(self, x: mx.array, attention_mask: Optional[mx.array]) -> mx.array:
+    def __call__(self, x: mx.array, attention_mask: mx.array | None) -> mx.array:
         attn = self.attention(x, attention_mask)
         if self.config.hidden_act == "swiglu":
             return self.mlp(attn)
@@ -289,7 +285,7 @@ class BertEncoder(nn.Module):
         super().__init__()
         self.layer = [BertLayer(config) for _ in range(config.num_hidden_layers)]
 
-    def __call__(self, x: mx.array, attention_mask: Optional[mx.array]) -> mx.array:
+    def __call__(self, x: mx.array, attention_mask: mx.array | None) -> mx.array:
         for layer in self.layer:
             x = layer(x, attention_mask)
         return x
@@ -318,8 +314,8 @@ class BertModel(nn.Module):
     def __call__(
         self,
         input_ids: mx.array,
-        token_type_ids: Optional[mx.array],
-        attention_mask: Optional[mx.array],
+        token_type_ids: mx.array | None,
+        attention_mask: mx.array | None,
     ) -> mx.array:
         x = self.embeddings(input_ids, token_type_ids)
         x = self.encoder(x, attention_mask)

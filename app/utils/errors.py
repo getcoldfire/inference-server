@@ -36,8 +36,6 @@ def create_error_response(
             "message": message,
             "type": err_type,
             "param": param,
-            "code": str(
-                code or (status_code.value if isinstance(status_code, HTTPStatus) else status_code)
-            ),
+            "code": str(code or (status_code.value if isinstance(status_code, HTTPStatus) else status_code)),
         }
     }

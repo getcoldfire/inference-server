@@ -21,7 +21,6 @@ import pytest
 
 from tests.integration.conftest import CHAT_MODEL_ID, requires_apple_silicon
 
-
 # Use a distinct marker per request. Capital-letter + digit groups avoid
 # accidental in-text collisions and aren't subwords of common English
 # tokens. Each one is unique by construction.
@@ -48,9 +47,7 @@ async def test_concurrent_no_kv_contamination(chat_server: tuple[str, int]) -> N
                 "messages": [
                     {
                         "role": "user",
-                        "content": (
-                            f"Repeat the following token exactly once, with no other words: {marker}"
-                        ),
+                        "content": (f"Repeat the following token exactly once, with no other words: {marker}"),
                     },
                 ],
                 "max_tokens": 32,
@@ -66,10 +63,8 @@ async def test_concurrent_no_kv_contamination(chat_server: tuple[str, int]) -> N
     async with httpx.AsyncClient(timeout=120.0) as client:
         responses = await asyncio.gather(*(_one(client, m) for m in _MARKERS))
 
-    for marker, text in zip(_MARKERS, responses):
-        assert marker in text, (
-            f"missing own marker {marker!r} in response: {text!r}"
-        )
+    for marker, text in zip(_MARKERS, responses, strict=True):
+        assert marker in text, f"missing own marker {marker!r} in response: {text!r}"
         for other in _MARKERS:
             if other == marker:
                 continue

@@ -8,9 +8,9 @@ checkpoint prefill path that enables cache reuse on models where
 from __future__ import annotations
 
 import importlib
-from pathlib import Path
 import sys
 import types
+from pathlib import Path
 from typing import Any
 from unittest.mock import Mock
 
@@ -94,9 +94,7 @@ def _load_handler_class(monkeypatch: pytest.MonkeyPatch) -> type:
 class TestNonTrimmableCacheReuse:
     """Verify the 'shorter cache' trie path enables reuse when trimming is impossible."""
 
-    def test_checkpoint_prefix_reused_on_divergent_suffix(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_checkpoint_prefix_reused_on_divergent_suffix(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """A checkpoint at the system-prompt boundary enables shorter-path cache hits."""
         LRUPromptCache = _load_prompt_cache_class(monkeypatch, trimmable=False)
         cache = LRUPromptCache(max_size=10)
@@ -116,9 +114,7 @@ class TestNonTrimmableCacheReuse:
         assert result_cache is not None, "Expected shorter-path cache hit"
         assert rest == [20, 21, 22], "Remaining tokens should be the divergent suffix"
 
-    def test_no_checkpoint_means_no_reuse_on_non_trimmable(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_no_checkpoint_means_no_reuse_on_non_trimmable(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Without a checkpoint, non-trimmable caches get no reuse on divergent suffixes."""
         LRUPromptCache = _load_prompt_cache_class(monkeypatch, trimmable=False)
         cache = LRUPromptCache(max_size=10)
@@ -134,9 +130,7 @@ class TestNonTrimmableCacheReuse:
         assert result_cache is None, "No shorter prefix cached, no trim possible"
         assert rest == full_request_2
 
-    def test_exact_match_still_works_for_non_trimmable(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_exact_match_still_works_for_non_trimmable(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Exact token matches always work regardless of trimmability."""
         LRUPromptCache = _load_prompt_cache_class(monkeypatch, trimmable=False)
         cache = LRUPromptCache(max_size=10)
@@ -241,9 +235,7 @@ class TestComputeCheckpointBoundary:
 
         assert boundary is not None
 
-        prefix_prompt = handler.model.create_input_prompt(
-            [*messages[:-1], {"role": "user", "content": "x"}], {}
-        )
+        prefix_prompt = handler.model.create_input_prompt([*messages[:-1], {"role": "user", "content": "x"}], {})
         prefix_ids = handler.model.encode_prompt(prefix_prompt)
         common = 0
         for a, b in zip(input_ids, prefix_ids, strict=False):
@@ -252,9 +244,7 @@ class TestComputeCheckpointBoundary:
             common += 1
         assert boundary == common
 
-    def test_boundary_handles_template_error_gracefully(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_boundary_handles_template_error_gracefully(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Returns None when the chat template raises an exception."""
         handler = self._make_handler(monkeypatch)
         original = handler.model.create_input_prompt
@@ -403,9 +393,7 @@ class TestModelCheckpointPrefill:
         model._prefill_cache.assert_called_once_with([1, 2, 3, 4, 5], fake_cache)
         assert saved_caches == ["called"]
 
-    def test_stream_generate_receives_suffix_after_checkpoint(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_stream_generate_receives_suffix_after_checkpoint(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """After checkpoint prefill, ``stream_generate`` gets only the remaining suffix tokens."""
         model, fake_generate = self._make_model(monkeypatch)
 
@@ -422,9 +410,7 @@ class TestModelCheckpointPrefill:
 
         # stream_generate should receive the suffix [6, 7, 8]
         call_args = fake_generate.stream_generate.call_args
-        actual_input_ids = (
-            call_args[1].get("prompt") if "prompt" in (call_args[1] or {}) else call_args[0][2]
-        )
+        actual_input_ids = call_args[1].get("prompt") if "prompt" in (call_args[1] or {}) else call_args[0][2]
         assert list(actual_input_ids) == [6, 7, 8]
 
     def test_no_prefill_when_position_is_none(self, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -513,9 +499,7 @@ class TestCheckpointOnShorterCacheHit:
         handler.debug = False
         return handler
 
-    def test_checkpoint_position_adjusted_for_shorter_hit(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_checkpoint_position_adjusted_for_shorter_hit(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """checkpoint_position is relative to rest_input_ids, not full input_ids."""
         handler = self._make_handler(monkeypatch)
 
@@ -536,15 +520,11 @@ class TestCheckpointOnShorterCacheHit:
         rest_input_ids = input_ids[cached_prefix_len:]
 
         # The checkpoint position should be adjusted for the shorter hit
-        assert boundary > cached_prefix_len, (
-            "Boundary must be beyond cached prefix for this test to be meaningful"
-        )
+        assert boundary > cached_prefix_len, "Boundary must be beyond cached prefix for this test to be meaningful"
         expected_checkpoint_pos = boundary - cached_prefix_len
         assert 0 < expected_checkpoint_pos < len(rest_input_ids)
 
-    def test_no_checkpoint_when_boundary_within_cached_prefix(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_no_checkpoint_when_boundary_within_cached_prefix(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """No checkpoint needed when boundary falls within the already-cached portion."""
         handler = self._make_handler(monkeypatch)
 

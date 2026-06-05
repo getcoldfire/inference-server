@@ -48,9 +48,7 @@ def test_glm4_moe_reasoning_and_tool_parsing_streaming() -> None:
     # Verify reasoning parser extracted content correctly
     assert len(reasoning_results) > 0
     # Check that we got reasoning results for the chunks with reasoning tags
-    assert any(
-        "reasoning_content" in result for result in reasoning_results if isinstance(result, dict)
-    )
+    assert any("reasoning_content" in result for result in reasoning_results if isinstance(result, dict))
     # The reasoning parser should have completed and extracted reasoning content
     # Note: The original test checks for "content" key, which may be present in some cases
     final_reasoning = reasoning_results[-1]

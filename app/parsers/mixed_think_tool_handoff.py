@@ -74,16 +74,12 @@ class MixedThinkToolHandoffReasoningParser(AbstractReasoningParser):
             return tool_idx, "tool", None
         return -1, None, None
 
-    def _extract_from_reasoning_body_stream(
-        self, reasoning_body: str
-    ) -> tuple[dict[str, str] | None, bool]:
+    def _extract_from_reasoning_body_stream(self, reasoning_body: str) -> tuple[dict[str, str] | None, bool]:
         """Extract streaming reasoning payload and determine completion."""
         boundary_idx, boundary_type, boundary_close_marker = self._select_boundary(reasoning_body)
         if boundary_type == "close" and boundary_close_marker is not None:
             reasoning_content = reasoning_body[:boundary_idx]
-            after_reasoning_close_content = reasoning_body[
-                boundary_idx + len(boundary_close_marker) :
-            ]
+            after_reasoning_close_content = reasoning_body[boundary_idx + len(boundary_close_marker) :]
             self.buffer = ""
             self.state = ReasoningParserState.NORMAL
             self._active_close = None
@@ -104,8 +100,7 @@ class MixedThinkToolHandoffReasoningParser(AbstractReasoningParser):
             }, False
 
         overlaps = [_suffix_prefix_overlap(reasoning_body, TOOL_OPEN)] + [
-            _suffix_prefix_overlap(reasoning_body, close_marker)
-            for close_marker in set(self._open_to_close.values())
+            _suffix_prefix_overlap(reasoning_body, close_marker) for close_marker in set(self._open_to_close.values())
         ]
         overlap = max(overlaps)
         if overlap > 0:
@@ -157,9 +152,7 @@ class MixedThinkToolHandoffReasoningParser(AbstractReasoningParser):
                 self._active_close = self._open_to_close[open_marker]
                 passthrough = combined[:open_idx]
                 reasoning_body = combined[open_idx + len(open_marker) :]
-                parsed_payload, is_complete = self._extract_from_reasoning_body_stream(
-                    reasoning_body
-                )
+                parsed_payload, is_complete = self._extract_from_reasoning_body_stream(reasoning_body)
 
                 if parsed_payload is not None and passthrough:
                     merged = dict(parsed_payload)
@@ -175,9 +168,7 @@ class MixedThinkToolHandoffReasoningParser(AbstractReasoningParser):
                     return {"content": passthrough}, False
                 return None, False
 
-            overlap = max(
-                _suffix_prefix_overlap(combined, marker) for marker in self._open_to_close
-            )
+            overlap = max(_suffix_prefix_overlap(combined, marker) for marker in self._open_to_close)
             if overlap > 0:
                 passthrough = combined[:-overlap]
                 self.buffer = combined[-overlap:]

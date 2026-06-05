@@ -4,14 +4,14 @@ from __future__ import annotations
 
 import importlib
 import json
-from pathlib import Path
 import sys
 import types
+from pathlib import Path
 from typing import Any
 
+import pytest
 from fastapi import HTTPException
 from fastapi.responses import JSONResponse, StreamingResponse
-import pytest
 
 from app.config import MLXServerConfig, load_config_from_yaml
 from app.schemas.openai import ChatCompletionRequest, Config, Message, ResponsesRequest
@@ -69,9 +69,7 @@ def _load_endpoints_module() -> Any:
         "app.handler.mlx_lm",
         "app.api.endpoints",
     ]
-    original_modules: dict[str, types.ModuleType | None] = {
-        name: sys.modules.get(name) for name in module_names
-    }
+    original_modules: dict[str, types.ModuleType | None] = {name: sys.modules.get(name) for name in module_names}
 
     try:
         sys.modules["app.handler.mlx_lm"] = fake_lm_module
@@ -241,12 +239,8 @@ async def test_chat_completions_can_apply_different_defaults_per_model(
         captured_requests.append(request.model_copy(deep=True))
         return JSONResponse(content={"ok": True})
 
-    handler_a = types.SimpleNamespace(
-        handler_type="lm", _uses_model_sampling_defaults=True, **PER_MODEL_DEFAULTS_A
-    )
-    handler_b = types.SimpleNamespace(
-        handler_type="lm", _uses_model_sampling_defaults=True, **PER_MODEL_DEFAULTS_B
-    )
+    handler_a = types.SimpleNamespace(handler_type="lm", _uses_model_sampling_defaults=True, **PER_MODEL_DEFAULTS_A)
+    handler_b = types.SimpleNamespace(handler_type="lm", _uses_model_sampling_defaults=True, **PER_MODEL_DEFAULTS_B)
     registry = _FakeRegistry({"model-a": handler_a, "model-b": handler_b})
 
     monkeypatch.setattr(endpoints_module, "process_text_request", _fake_process_text_request)
@@ -289,55 +283,29 @@ async def test_chat_completions_can_apply_different_defaults_per_model(
     await endpoints_module.chat_completions(request_a, _make_raw_request(registry))
     await endpoints_module.chat_completions(request_b, _make_raw_request(registry))
 
-    assert captured_requests[0].temperature == pytest.approx(
-        PER_MODEL_DEFAULTS_A["default_temperature"]
-    )
+    assert captured_requests[0].temperature == pytest.approx(PER_MODEL_DEFAULTS_A["default_temperature"])
     assert captured_requests[0].top_p == pytest.approx(PER_MODEL_DEFAULTS_A["default_top_p"])
     assert captured_requests[0].top_k == PER_MODEL_DEFAULTS_A["default_top_k"]
     assert captured_requests[0].min_p == pytest.approx(PER_MODEL_DEFAULTS_A["default_min_p"])
-    assert captured_requests[0].repetition_penalty == pytest.approx(
-        PER_MODEL_DEFAULTS_A["default_repetition_penalty"]
-    )
+    assert captured_requests[0].repetition_penalty == pytest.approx(PER_MODEL_DEFAULTS_A["default_repetition_penalty"])
     assert captured_requests[0].seed == PER_MODEL_DEFAULTS_A["default_seed"]
     assert captured_requests[0].max_completion_tokens == PER_MODEL_DEFAULTS_A["default_max_tokens"]
-    assert captured_requests[0].xtc_probability == pytest.approx(
-        PER_MODEL_DEFAULTS_A["default_xtc_probability"]
-    )
-    assert captured_requests[0].xtc_threshold == pytest.approx(
-        PER_MODEL_DEFAULTS_A["default_xtc_threshold"]
-    )
-    assert captured_requests[0].presence_penalty == pytest.approx(
-        PER_MODEL_DEFAULTS_A["default_presence_penalty"]
-    )
-    assert (
-        captured_requests[0].repetition_context_size
-        == PER_MODEL_DEFAULTS_A["default_repetition_context_size"]
-    )
+    assert captured_requests[0].xtc_probability == pytest.approx(PER_MODEL_DEFAULTS_A["default_xtc_probability"])
+    assert captured_requests[0].xtc_threshold == pytest.approx(PER_MODEL_DEFAULTS_A["default_xtc_threshold"])
+    assert captured_requests[0].presence_penalty == pytest.approx(PER_MODEL_DEFAULTS_A["default_presence_penalty"])
+    assert captured_requests[0].repetition_context_size == PER_MODEL_DEFAULTS_A["default_repetition_context_size"]
 
-    assert captured_requests[1].temperature == pytest.approx(
-        PER_MODEL_DEFAULTS_B["default_temperature"]
-    )
+    assert captured_requests[1].temperature == pytest.approx(PER_MODEL_DEFAULTS_B["default_temperature"])
     assert captured_requests[1].top_p == pytest.approx(PER_MODEL_DEFAULTS_B["default_top_p"])
     assert captured_requests[1].top_k == PER_MODEL_DEFAULTS_B["default_top_k"]
     assert captured_requests[1].min_p == pytest.approx(PER_MODEL_DEFAULTS_B["default_min_p"])
-    assert captured_requests[1].repetition_penalty == pytest.approx(
-        PER_MODEL_DEFAULTS_B["default_repetition_penalty"]
-    )
+    assert captured_requests[1].repetition_penalty == pytest.approx(PER_MODEL_DEFAULTS_B["default_repetition_penalty"])
     assert captured_requests[1].seed == PER_MODEL_DEFAULTS_B["default_seed"]
     assert captured_requests[1].max_completion_tokens == PER_MODEL_DEFAULTS_B["default_max_tokens"]
-    assert captured_requests[1].xtc_probability == pytest.approx(
-        PER_MODEL_DEFAULTS_B["default_xtc_probability"]
-    )
-    assert captured_requests[1].xtc_threshold == pytest.approx(
-        PER_MODEL_DEFAULTS_B["default_xtc_threshold"]
-    )
-    assert captured_requests[1].presence_penalty == pytest.approx(
-        PER_MODEL_DEFAULTS_B["default_presence_penalty"]
-    )
-    assert (
-        captured_requests[1].repetition_context_size
-        == PER_MODEL_DEFAULTS_B["default_repetition_context_size"]
-    )
+    assert captured_requests[1].xtc_probability == pytest.approx(PER_MODEL_DEFAULTS_B["default_xtc_probability"])
+    assert captured_requests[1].xtc_threshold == pytest.approx(PER_MODEL_DEFAULTS_B["default_xtc_threshold"])
+    assert captured_requests[1].presence_penalty == pytest.approx(PER_MODEL_DEFAULTS_B["default_presence_penalty"])
+    assert captured_requests[1].repetition_context_size == PER_MODEL_DEFAULTS_B["default_repetition_context_size"]
 
 
 @pytest.mark.asyncio
@@ -385,9 +353,7 @@ async def test_single_model_implicit_handler_defaults_do_not_shadow_env_defaults
 
     await endpoints_module.chat_completions(request, _make_raw_request(registry))
 
-    assert captured_requests[0].temperature == pytest.approx(
-        float(GLOBAL_ENV_DEFAULTS["DEFAULT_TEMPERATURE"])
-    )
+    assert captured_requests[0].temperature == pytest.approx(float(GLOBAL_ENV_DEFAULTS["DEFAULT_TEMPERATURE"]))
     assert captured_requests[0].top_p == pytest.approx(float(GLOBAL_ENV_DEFAULTS["DEFAULT_TOP_P"]))
     assert captured_requests[0].top_k == int(GLOBAL_ENV_DEFAULTS["DEFAULT_TOP_K"])
     assert captured_requests[0].min_p == pytest.approx(float(GLOBAL_ENV_DEFAULTS["DEFAULT_MIN_P"]))
@@ -395,21 +361,13 @@ async def test_single_model_implicit_handler_defaults_do_not_shadow_env_defaults
         float(GLOBAL_ENV_DEFAULTS["DEFAULT_REPETITION_PENALTY"])
     )
     assert captured_requests[0].seed == int(GLOBAL_ENV_DEFAULTS["DEFAULT_SEED"])
-    assert captured_requests[0].max_completion_tokens == int(
-        GLOBAL_ENV_DEFAULTS["DEFAULT_MAX_TOKENS"]
-    )
-    assert captured_requests[0].xtc_probability == pytest.approx(
-        float(GLOBAL_ENV_DEFAULTS["DEFAULT_XTC_PROBABILITY"])
-    )
-    assert captured_requests[0].xtc_threshold == pytest.approx(
-        float(GLOBAL_ENV_DEFAULTS["DEFAULT_XTC_THRESHOLD"])
-    )
+    assert captured_requests[0].max_completion_tokens == int(GLOBAL_ENV_DEFAULTS["DEFAULT_MAX_TOKENS"])
+    assert captured_requests[0].xtc_probability == pytest.approx(float(GLOBAL_ENV_DEFAULTS["DEFAULT_XTC_PROBABILITY"]))
+    assert captured_requests[0].xtc_threshold == pytest.approx(float(GLOBAL_ENV_DEFAULTS["DEFAULT_XTC_THRESHOLD"]))
     assert captured_requests[0].presence_penalty == pytest.approx(
         float(GLOBAL_ENV_DEFAULTS["DEFAULT_PRESENCE_PENALTY"])
     )
-    assert captured_requests[0].repetition_context_size == int(
-        GLOBAL_ENV_DEFAULTS["DEFAULT_REPETITION_CONTEXT_SIZE"]
-    )
+    assert captured_requests[0].repetition_context_size == int(GLOBAL_ENV_DEFAULTS["DEFAULT_REPETITION_CONTEXT_SIZE"])
 
 
 @pytest.mark.asyncio
@@ -432,9 +390,7 @@ async def test_chat_completions_explicit_request_values_override_model_defaults(
         captured_requests.append(request.model_copy(deep=True))
         return JSONResponse(content={"ok": True})
 
-    handler = types.SimpleNamespace(
-        handler_type="lm", _uses_model_sampling_defaults=True, **PER_MODEL_DEFAULTS_A
-    )
+    handler = types.SimpleNamespace(handler_type="lm", _uses_model_sampling_defaults=True, **PER_MODEL_DEFAULTS_A)
     registry = _FakeRegistry({"model-a": handler})
 
     monkeypatch.setattr(endpoints_module, "process_text_request", _fake_process_text_request)
@@ -480,12 +436,8 @@ async def test_responses_can_apply_different_defaults_per_model(
 
     endpoints_module = _load_endpoints_module()
 
-    handler_a = types.SimpleNamespace(
-        handler_type="lm", _uses_model_sampling_defaults=True, **PER_MODEL_DEFAULTS_A
-    )
-    handler_b = types.SimpleNamespace(
-        handler_type="lm", _uses_model_sampling_defaults=True, **PER_MODEL_DEFAULTS_B
-    )
+    handler_a = types.SimpleNamespace(handler_type="lm", _uses_model_sampling_defaults=True, **PER_MODEL_DEFAULTS_A)
+    handler_b = types.SimpleNamespace(handler_type="lm", _uses_model_sampling_defaults=True, **PER_MODEL_DEFAULTS_B)
     for env_name, value in GLOBAL_ENV_DEFAULTS.items():
         monkeypatch.setenv(env_name, value)
 
@@ -515,27 +467,19 @@ async def test_responses_can_apply_different_defaults_per_model(
     refined_request_a = endpoints_module.refine_responses_request(request_a, handler_a)
     refined_request_b = endpoints_module.refine_responses_request(request_b, handler_b)
 
-    assert refined_request_a.temperature == pytest.approx(
-        PER_MODEL_DEFAULTS_A["default_temperature"]
-    )
+    assert refined_request_a.temperature == pytest.approx(PER_MODEL_DEFAULTS_A["default_temperature"])
     assert refined_request_a.top_p == pytest.approx(PER_MODEL_DEFAULTS_A["default_top_p"])
     assert refined_request_a.top_k == PER_MODEL_DEFAULTS_A["default_top_k"]
     assert refined_request_a.min_p == pytest.approx(PER_MODEL_DEFAULTS_A["default_min_p"])
-    assert refined_request_a.repetition_penalty == pytest.approx(
-        PER_MODEL_DEFAULTS_A["default_repetition_penalty"]
-    )
+    assert refined_request_a.repetition_penalty == pytest.approx(PER_MODEL_DEFAULTS_A["default_repetition_penalty"])
     assert refined_request_a.seed == PER_MODEL_DEFAULTS_A["default_seed"]
     assert refined_request_a.max_output_tokens == PER_MODEL_DEFAULTS_A["default_max_tokens"]
 
-    assert refined_request_b.temperature == pytest.approx(
-        PER_MODEL_DEFAULTS_B["default_temperature"]
-    )
+    assert refined_request_b.temperature == pytest.approx(PER_MODEL_DEFAULTS_B["default_temperature"])
     assert refined_request_b.top_p == pytest.approx(PER_MODEL_DEFAULTS_B["default_top_p"])
     assert refined_request_b.top_k == PER_MODEL_DEFAULTS_B["default_top_k"]
     assert refined_request_b.min_p == pytest.approx(PER_MODEL_DEFAULTS_B["default_min_p"])
-    assert refined_request_b.repetition_penalty == pytest.approx(
-        PER_MODEL_DEFAULTS_B["default_repetition_penalty"]
-    )
+    assert refined_request_b.repetition_penalty == pytest.approx(PER_MODEL_DEFAULTS_B["default_repetition_penalty"])
     assert refined_request_b.seed == PER_MODEL_DEFAULTS_B["default_seed"]
     assert refined_request_b.max_output_tokens == PER_MODEL_DEFAULTS_B["default_max_tokens"]
 
@@ -565,15 +509,11 @@ async def test_responses_single_model_implicit_handler_defaults_do_not_shadow_en
 
     refined_request = endpoints_module.refine_responses_request(request, handler)
 
-    assert refined_request.temperature == pytest.approx(
-        float(GLOBAL_ENV_DEFAULTS["DEFAULT_TEMPERATURE"])
-    )
+    assert refined_request.temperature == pytest.approx(float(GLOBAL_ENV_DEFAULTS["DEFAULT_TEMPERATURE"]))
     assert refined_request.top_p == pytest.approx(float(GLOBAL_ENV_DEFAULTS["DEFAULT_TOP_P"]))
     assert refined_request.top_k == int(GLOBAL_ENV_DEFAULTS["DEFAULT_TOP_K"])
     assert refined_request.min_p == pytest.approx(float(GLOBAL_ENV_DEFAULTS["DEFAULT_MIN_P"]))
-    assert refined_request.repetition_penalty == pytest.approx(
-        float(GLOBAL_ENV_DEFAULTS["DEFAULT_REPETITION_PENALTY"])
-    )
+    assert refined_request.repetition_penalty == pytest.approx(float(GLOBAL_ENV_DEFAULTS["DEFAULT_REPETITION_PENALTY"]))
     assert refined_request.seed == int(GLOBAL_ENV_DEFAULTS["DEFAULT_SEED"])
     assert refined_request.max_output_tokens == int(GLOBAL_ENV_DEFAULTS["DEFAULT_MAX_TOKENS"])
 
@@ -607,14 +547,10 @@ async def test_responses_omitted_model_uses_backward_compatible_fallback_handler
     )
     registry = _FakeRegistry({"model-a": registry_handler})
 
-    monkeypatch.setattr(
-        endpoints_module, "process_text_responses_request", _fake_process_text_responses_request
-    )
+    monkeypatch.setattr(endpoints_module, "process_text_responses_request", _fake_process_text_responses_request)
 
     request = ResponsesRequest(input="hello", model=None)
-    response = await endpoints_module.responses_endpoint(
-        request, _make_raw_request(registry, handler=fallback_handler)
-    )
+    response = await endpoints_module.responses_endpoint(request, _make_raw_request(registry, handler=fallback_handler))
 
     assert isinstance(response, JSONResponse)
     assert captured_handlers == [fallback_handler]
@@ -634,9 +570,7 @@ async def test_responses_omitted_model_does_not_fallback_to_non_text_handler() -
 
     request = ResponsesRequest(input="hello", model=None)
     with pytest.raises(HTTPException) as exc_info:
-        await endpoints_module.responses_endpoint(
-            request, _make_raw_request(registry, handler=fallback_handler)
-        )
+        await endpoints_module.responses_endpoint(request, _make_raw_request(registry, handler=fallback_handler))
 
     assert exc_info.value.status_code == 404
     assert exc_info.value.detail["error"]["type"] == "model_not_found"
@@ -678,9 +612,7 @@ async def test_responses_omitted_model_non_text_fallback_uses_on_demand_default_
     )
 
     request = ResponsesRequest(input="hello", model=None)
-    response = await endpoints_module.responses_endpoint(
-        request, _make_raw_request(registry, handler=fallback_handler)
-    )
+    response = await endpoints_module.responses_endpoint(request, _make_raw_request(registry, handler=fallback_handler))
 
     assert isinstance(response, JSONResponse)
     assert response.status_code == 200
@@ -719,9 +651,7 @@ async def test_chat_completions_omitted_model_uses_backward_compatible_fallback_
     monkeypatch.setattr(endpoints_module, "process_text_request", _fake_process_text_request)
 
     request = ChatCompletionRequest(messages=[Message(role="user", content="hello")])
-    response = await endpoints_module.chat_completions(
-        request, _make_raw_request(registry, handler=fallback_handler)
-    )
+    response = await endpoints_module.chat_completions(request, _make_raw_request(registry, handler=fallback_handler))
 
     assert isinstance(response, JSONResponse)
     assert captured_handlers == [fallback_handler]
@@ -756,9 +686,7 @@ async def test_chat_completions_omitted_model_does_not_fallback_to_non_chat_hand
     request = ChatCompletionRequest(messages=[Message(role="user", content="hello")])
 
     with pytest.raises(HTTPException) as exc_info:
-        await endpoints_module.chat_completions(
-            request, _make_raw_request(registry, handler=fallback_handler)
-        )
+        await endpoints_module.chat_completions(request, _make_raw_request(registry, handler=fallback_handler))
 
     assert exc_info.value.status_code == 404
     assert exc_info.value.detail["error"]["type"] == "model_not_found"
@@ -784,9 +712,7 @@ async def test_chat_completions_omitted_model_reports_resolved_fallback_model_id
     registry = _FakeRegistry({"alias-a": fallback_handler})
 
     request = ChatCompletionRequest(messages=[Message(role="user", content="hello")])
-    response = await endpoints_module.chat_completions(
-        request, _make_raw_request(registry, handler=fallback_handler)
-    )
+    response = await endpoints_module.chat_completions(request, _make_raw_request(registry, handler=fallback_handler))
 
     assert isinstance(response, JSONResponse)
     payload = json.loads(response.body)
@@ -812,15 +738,10 @@ async def test_chat_completions_stream_omitted_model_reports_resolved_fallback_m
     registry = _FakeRegistry({"alias-a": fallback_handler})
 
     request = ChatCompletionRequest(messages=[Message(role="user", content="hello")], stream=True)
-    response = await endpoints_module.chat_completions(
-        request, _make_raw_request(registry, handler=fallback_handler)
-    )
+    response = await endpoints_module.chat_completions(request, _make_raw_request(registry, handler=fallback_handler))
 
     assert isinstance(response, StreamingResponse)
-    body_chunks = [
-        chunk.decode() if isinstance(chunk, bytes) else chunk
-        async for chunk in response.body_iterator
-    ]
+    body_chunks = [chunk.decode() if isinstance(chunk, bytes) else chunk async for chunk in response.body_iterator]
 
     events: list[dict[str, Any]] = []
     for item in "".join(body_chunks).split("\n\n"):
@@ -860,9 +781,7 @@ async def test_chat_completions_explicit_legacy_alias_without_registry_entry_sti
     )
 
     with pytest.raises(HTTPException) as exc_info:
-        await endpoints_module.chat_completions(
-            request, _make_raw_request(registry, handler=fallback_handler)
-        )
+        await endpoints_module.chat_completions(request, _make_raw_request(registry, handler=fallback_handler))
 
     assert exc_info.value.status_code == 404
     assert exc_info.value.detail["error"]["type"] == "model_not_found"
@@ -889,9 +808,7 @@ async def test_responses_omitted_model_reports_resolved_fallback_model_id(
     registry = _FakeRegistry({"alias-a": fallback_handler})
 
     request = ResponsesRequest(input="hello", model=None)
-    response = await endpoints_module.responses_endpoint(
-        request, _make_raw_request(registry, handler=fallback_handler)
-    )
+    response = await endpoints_module.responses_endpoint(request, _make_raw_request(registry, handler=fallback_handler))
 
     assert isinstance(response, JSONResponse)
     payload = json.loads(response.body)
@@ -917,15 +834,10 @@ async def test_responses_stream_omitted_model_reports_resolved_fallback_model_id
     registry = _FakeRegistry({"alias-a": fallback_handler})
 
     request = ResponsesRequest(input="hello", model=None, stream=True)
-    response = await endpoints_module.responses_endpoint(
-        request, _make_raw_request(registry, handler=fallback_handler)
-    )
+    response = await endpoints_module.responses_endpoint(request, _make_raw_request(registry, handler=fallback_handler))
 
     assert isinstance(response, StreamingResponse)
-    body_chunks = [
-        chunk.decode() if isinstance(chunk, bytes) else chunk
-        async for chunk in response.body_iterator
-    ]
+    body_chunks = [chunk.decode() if isinstance(chunk, bytes) else chunk async for chunk in response.body_iterator]
 
     events_by_type: dict[str, dict[str, Any]] = {}
     for item in "".join(body_chunks).split("\n\n"):
@@ -963,9 +875,7 @@ async def test_responses_explicit_legacy_alias_without_registry_entry_still_404s
     request = ResponsesRequest(input="hello", model=Config.TEXT_MODEL)
 
     with pytest.raises(HTTPException) as exc_info:
-        await endpoints_module.responses_endpoint(
-            request, _make_raw_request(registry, handler=fallback_handler)
-        )
+        await endpoints_module.responses_endpoint(request, _make_raw_request(registry, handler=fallback_handler))
 
     assert exc_info.value.status_code == 404
     assert exc_info.value.detail["error"]["type"] == "model_not_found"
@@ -1004,9 +914,7 @@ async def test_responses_single_model_omitted_model_preserves_legacy_default_ali
     registry = _single_model_registry_case(registry_case, single_handler)
 
     request = ResponsesRequest(input="hello", model=None)
-    response = await endpoints_module.responses_endpoint(
-        request, _make_raw_request(registry, handler=single_handler)
-    )
+    response = await endpoints_module.responses_endpoint(request, _make_raw_request(registry, handler=single_handler))
 
     assert isinstance(response, JSONResponse)
     payload = json.loads(response.body)
@@ -1044,15 +952,10 @@ async def test_responses_stream_single_model_omitted_model_preserves_legacy_defa
     registry = _single_model_registry_case(registry_case, single_handler)
 
     request = ResponsesRequest(input="hello", model=None, stream=True)
-    response = await endpoints_module.responses_endpoint(
-        request, _make_raw_request(registry, handler=single_handler)
-    )
+    response = await endpoints_module.responses_endpoint(request, _make_raw_request(registry, handler=single_handler))
 
     assert isinstance(response, StreamingResponse)
-    body_chunks = [
-        chunk.decode() if isinstance(chunk, bytes) else chunk
-        async for chunk in response.body_iterator
-    ]
+    body_chunks = [chunk.decode() if isinstance(chunk, bytes) else chunk async for chunk in response.body_iterator]
 
     events_by_type: dict[str, dict[str, Any]] = {}
     for item in "".join(body_chunks).split("\n\n"):
@@ -1095,9 +998,7 @@ async def test_chat_completions_single_model_omitted_model_preserves_legacy_defa
     registry = _single_model_registry_case(registry_case, single_handler)
 
     request = ChatCompletionRequest(messages=[Message(role="user", content="hello")])
-    response = await endpoints_module.chat_completions(
-        request, _make_raw_request(registry, handler=single_handler)
-    )
+    response = await endpoints_module.chat_completions(request, _make_raw_request(registry, handler=single_handler))
 
     assert isinstance(response, JSONResponse)
     payload = json.loads(response.body)
@@ -1130,15 +1031,10 @@ async def test_chat_completions_stream_single_model_omitted_model_preserves_lega
     registry = _single_model_registry_case(registry_case, single_handler)
 
     request = ChatCompletionRequest(messages=[Message(role="user", content="hello")], stream=True)
-    response = await endpoints_module.chat_completions(
-        request, _make_raw_request(registry, handler=single_handler)
-    )
+    response = await endpoints_module.chat_completions(request, _make_raw_request(registry, handler=single_handler))
 
     assert isinstance(response, StreamingResponse)
-    body_chunks = [
-        chunk.decode() if isinstance(chunk, bytes) else chunk
-        async for chunk in response.body_iterator
-    ]
+    body_chunks = [chunk.decode() if isinstance(chunk, bytes) else chunk async for chunk in response.body_iterator]
 
     events: list[dict[str, Any]] = []
     for item in "".join(body_chunks).split("\n\n"):

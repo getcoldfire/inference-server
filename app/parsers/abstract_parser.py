@@ -110,9 +110,7 @@ class AbstractReasoningParser:
         NotImplementedError
             This method must be implemented by derived classes.
         """
-        raise NotImplementedError(
-            "AbstractReasoningParser.extract_reasoning has not been implemented!"
-        )
+        raise NotImplementedError("AbstractReasoningParser.extract_reasoning has not been implemented!")
 
     def extract_reasoning_streaming(self, chunk: str) -> tuple[dict[str, str] | str | None, bool]:
         """Extract reasoning content from streaming chunks.
@@ -134,9 +132,7 @@ class AbstractReasoningParser:
         NotImplementedError
             This method must be implemented by derived classes.
         """
-        raise NotImplementedError(
-            "AbstractReasoningParser.extract_reasoning_streaming has not been implemented!"
-        )
+        raise NotImplementedError("AbstractReasoningParser.extract_reasoning_streaming has not been implemented!")
 
 
 class ToolParserState(Enum):

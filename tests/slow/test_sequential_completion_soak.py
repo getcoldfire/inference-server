@@ -43,15 +43,11 @@ def test_100_sequential_completions(chat_server: tuple[str, int]) -> None:
                 f"{base_url}/v1/chat/completions",
                 json={
                     "model": CHAT_MODEL_ID,
-                    "messages": [
-                        {"role": "user", "content": f"Count to {i % 10 + 1}."}
-                    ],
+                    "messages": [{"role": "user", "content": f"Count to {i % 10 + 1}."}],
                     "max_tokens": 40,
                 },
             )
-            assert r.status_code == 200, (
-                f"non-200 at request {i}: {r.status_code} {r.text[:200]}"
-            )
+            assert r.status_code == 200, f"non-200 at request {i}: {r.status_code} {r.text[:200]}"
             latencies.append(time.monotonic() - start)
 
     final_rss = proc.memory_info().rss
@@ -73,10 +69,6 @@ def test_100_sequential_completions(chat_server: tuple[str, int]) -> None:
     )
 
     # Latency stability: p99 should not be more than 2x the median + 1s of jitter
-    assert p99 <= 2 * p50 + 1.0, (
-        f"latency degradation: p99 ({p99:.3f}s) > 2 * p50 ({p50:.3f}s) + 1.0s"
-    )
+    assert p99 <= 2 * p50 + 1.0, f"latency degradation: p99 ({p99:.3f}s) > 2 * p50 ({p50:.3f}s) + 1.0s"
     # Memory: no obvious leak across 100 requests
-    assert rss_growth_mb < 100, (
-        f"memory growth across 100 requests: {rss_growth_mb:.1f} MB"
-    )
+    assert rss_growth_mb < 100, f"memory growth across 100 requests: {rss_growth_mb:.1f} MB"

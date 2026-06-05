@@ -23,14 +23,10 @@ class HermesReasoningParser(AbstractReasoningParser):
     <think>reasoning_content</think>
     """
 
-    def __init__(
-        self, reasoning_open: str = REASONING_OPEN, reasoning_close: str = REASONING_CLOSE
-    ) -> None:
+    def __init__(self, reasoning_open: str = REASONING_OPEN, reasoning_close: str = REASONING_CLOSE) -> None:
         """Initialize the Hermes reasoning parser with appropriate regex patterns."""
         super().__init__(reasoning_open=reasoning_open, reasoning_close=reasoning_close)
-        self.reasoning_regex = re.compile(
-            f"{re.escape(reasoning_open)}(.*?){re.escape(reasoning_close)}", re.DOTALL
-        )
+        self.reasoning_regex = re.compile(f"{re.escape(reasoning_open)}(.*?){re.escape(reasoning_close)}", re.DOTALL)
 
     def extract_reasoning(self, model_output: str) -> dict[str, str] | None:
         """Extract reasoning content from complete model output.
@@ -51,9 +47,7 @@ class HermesReasoningParser(AbstractReasoningParser):
         if not matches:
             return {"content": model_output}
         reasoning_content_end_idx = model_output.rfind(self.reasoning_close)
-        after_reasoning_close_content = model_output[
-            reasoning_content_end_idx + len(self.reasoning_close) :
-        ]
+        after_reasoning_close_content = model_output[reasoning_content_end_idx + len(self.reasoning_close) :]
         return {
             "reasoning_content": matches[0],
             "after_reasoning_close_content": after_reasoning_close_content,
@@ -108,9 +102,7 @@ class HermesReasoningParser(AbstractReasoningParser):
             if self.reasoning_close in combined:
                 reasoning_content_end_idx = combined.find(self.reasoning_close)
                 reasoning_content = combined[:reasoning_content_end_idx]
-                after_reasoning_close_content = combined[
-                    reasoning_content_end_idx + len(self.reasoning_close) :
-                ]
+                after_reasoning_close_content = combined[reasoning_content_end_idx + len(self.reasoning_close) :]
                 self.buffer = ""
                 return {
                     "reasoning_content": reasoning_content,
@@ -142,9 +134,7 @@ class HermesToolParser(AbstractToolParser):
     def __init__(self, tool_open: str = TOOL_OPEN, tool_close: str = TOOL_CLOSE) -> None:
         """Initialize the Hermes4 tool parser with appropriate regex patterns."""
         super().__init__(tool_open=tool_open, tool_close=tool_close)
-        self.tool_regex = re.compile(
-            f"{re.escape(tool_open)}(.*?){re.escape(tool_close)}", re.DOTALL
-        )
+        self.tool_regex = re.compile(f"{re.escape(tool_open)}(.*?){re.escape(tool_close)}", re.DOTALL)
 
     def extract_tool_calls(self, model_output: str) -> dict[str, list] | None:
         """Extract tool calls from complete model output.

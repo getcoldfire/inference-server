@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from enum import Enum
 import json
+from enum import Enum
 
 from loguru import logger
 
@@ -34,9 +34,7 @@ class SolarOpenReasoningParser(HermesReasoningParser):
     Handles reasoning content in format: <|think|>reasoning_content<|end|>
     """
 
-    def __init__(
-        self, reasoning_open: str = REASONING_OPEN, reasoning_close: str = REASONING_CLOSE
-    ) -> None:
+    def __init__(self, reasoning_open: str = REASONING_OPEN, reasoning_close: str = REASONING_CLOSE) -> None:
         """Initialize Solar Open reasoning parser."""
         super().__init__(reasoning_open=reasoning_open, reasoning_close=reasoning_close)
 
@@ -87,18 +85,12 @@ class SolarOpenToolParser(AbstractToolParser):
 
             # Validate all required tokens were found
             if tool_call_name_idx == -1 or tool_call_args_idx == -1 or tool_call_close_idx == -1:
-                logger.warning(
-                    f"Malformed tool call in output, missing required tokens: {remaining_output[:100]}"
-                )
+                logger.warning(f"Malformed tool call in output, missing required tokens: {remaining_output[:100]}")
                 break
 
             # Extract tool name and arguments
-            tool_name = remaining_output[
-                tool_call_name_idx + len(self.tool_name_prefix) : tool_call_args_idx
-            ].strip()
-            tool_args = remaining_output[
-                tool_call_args_idx + len(self.tool_args_prefix) : tool_call_close_idx
-            ].strip()
+            tool_name = remaining_output[tool_call_name_idx + len(self.tool_name_prefix) : tool_call_args_idx].strip()
+            tool_args = remaining_output[tool_call_args_idx + len(self.tool_args_prefix) : tool_call_close_idx].strip()
 
             # Validate JSON arguments
             try:

@@ -265,12 +265,7 @@ class ParserManager:
             Parser name if unified, None otherwise.
         """
         # Both point to same unified parser
-        if (
-            reasoning_name
-            and tool_name
-            and reasoning_name == tool_name
-            and reasoning_name in UNIFIED_PARSER_MAP
-        ):
+        if reasoning_name and tool_name and reasoning_name == tool_name and reasoning_name in UNIFIED_PARSER_MAP:
             return reasoning_name
 
         # Either one is a unified parser (takes precedence)

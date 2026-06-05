@@ -19,9 +19,7 @@ def _load_convert_responses_request_to_chat_request() -> Any:
         "app.handler.mlx_lm",
         "app.api.endpoints",
     ]
-    original_modules: dict[str, types.ModuleType | None] = {
-        name: sys.modules.get(name) for name in module_names
-    }
+    original_modules: dict[str, types.ModuleType | None] = {name: sys.modules.get(name) for name in module_names}
 
     try:
         sys.modules["app.handler.mlx_lm"] = fake_lm_module
@@ -175,9 +173,7 @@ def test_convert_responses_stream_history_skips_reasoning_but_keeps_tool_turns()
         "user",
     ]
 
-    tool_call_messages = [
-        m for m in chat_request.messages if m.role == "assistant" and m.tool_calls
-    ]
+    tool_call_messages = [m for m in chat_request.messages if m.role == "assistant" and m.tool_calls]
     assert len(tool_call_messages) == 1
     assert tool_call_messages[0].tool_calls[0].function.name == "du"
     assert tool_call_messages[0].tool_calls[0].function.arguments == '{"path":"/tmp"}'

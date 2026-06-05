@@ -6,8 +6,8 @@ import asyncio
 from typing import Any
 from unittest.mock import Mock
 
-from fastapi import HTTPException
 import pytest
+from fastapi import HTTPException
 
 from app.config import ModelEntryConfig
 from app.core import handler_process as handler_process_module

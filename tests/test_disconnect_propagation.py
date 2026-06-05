@@ -25,7 +25,6 @@ assertion — the rest of the cancel chain is exercised by existing tests
 from __future__ import annotations
 
 import asyncio
-from typing import AsyncGenerator
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -85,8 +84,7 @@ async def test_disconnect_stops_iterating_source_generator():
 
     # We must NOT have read all 200 chunks before bailing out.
     assert src.yielded < 200, (
-        f"wrapper read {src.yielded} chunks despite client disconnect — "
-        "is_disconnected polling is not wired"
+        f"wrapper read {src.yielded} chunks despite client disconnect — is_disconnected polling is not wired"
     )
     # is_disconnected MUST have been called.
     assert request.is_disconnected.await_count >= 1

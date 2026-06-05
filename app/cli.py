@@ -9,8 +9,8 @@ runs in multi-handler mode, loading multiple models at once.
 from __future__ import annotations
 
 import asyncio
-from pathlib import Path
 import sys
+from pathlib import Path
 
 import click
 from loguru import logger
@@ -19,7 +19,6 @@ from .config import MLXServerConfig, load_config_from_yaml
 from .main import start_multi
 from .parsers import REASONING_PARSER_MAP, TOOL_PARSER_MAP, UNIFIED_PARSER_MAP
 from .version import __version__
-
 
 # cli-v2 spec contract (§4): accepts info|debug|warn|error in any case.
 # We translate to the internal loguru levels used by the rest of the app.
@@ -75,9 +74,7 @@ class UpperChoice(click.Choice):
         for opt in self.choices:
             if opt.upper() == upperchoice:
                 return upperchoice
-        raise click.BadParameter(
-            f"invalid choice: {choice!r}. (choose from {', '.join(map(repr, self.choices))})"
-        )
+        raise click.BadParameter(f"invalid choice: {choice!r}. (choose from {', '.join(map(repr, self.choices))})")
 
 
 # Configure basic logging for CLI (will be overridden by main.py)
@@ -93,9 +90,7 @@ logger.add(
 )
 
 
-def _print_licenses_and_exit(
-    ctx: click.Context, _param: click.Parameter, value: bool
-) -> None:
+def _print_licenses_and_exit(ctx: click.Context, _param: click.Parameter, value: bool) -> None:
     """Print the bundled third-party NOTICES.txt (if present) and exit.
 
     The cli-v2 spec (§4) requires a ``--licenses`` flag that prints all
@@ -187,10 +182,7 @@ def cli():
     "--host",
     default="127.0.0.1",
     show_default=True,
-    help=(
-        "Host to bind. Defaults to loopback per cli-v2 contract; "
-        "set to 0.0.0.0 to expose on all interfaces."
-    ),
+    help=("Host to bind. Defaults to loopback per cli-v2 contract; set to 0.0.0.0 to expose on all interfaces."),
 )
 @click.option("--queue-timeout", default=300, type=int, help="Request timeout in seconds")
 @click.option("--queue-size", default=100, type=int, help="Maximum queue size for pending requests")
@@ -279,10 +271,7 @@ def cli():
     "--prompt-cache-dir",
     default=None,
     type=click.Path(file_okay=False, dir_okay=True, path_type=str),
-    help=(
-        "Directory for disk-backed prompt KV cache payloads. "
-        "Defaults to a process-local temporary directory."
-    ),
+    help=("Directory for disk-backed prompt KV cache payloads. Defaults to a process-local temporary directory."),
 )
 @click.option(
     "--draft-model-path",
@@ -353,10 +342,7 @@ def cli():
     "--disable-batching",
     is_flag=True,
     default=False,
-    help=(
-        "Disable continuous batching for LM models. Use this when per-request "
-        "positive seeds must be honored."
-    ),
+    help=("Disable continuous batching for LM models. Use this when per-request positive seeds must be honored."),
 )
 # Sampling parameters (defaults used when API request omits them)
 @click.option(
@@ -366,9 +352,7 @@ def cli():
     help="Default maximum number of tokens to generate. If omitted, uses model generation_config.json when available.",
 )
 @click.option("--temperature", default=None, type=float, help="Default sampling temperature.")
-@click.option(
-    "--top-p", default=None, type=float, help="Default nucleus sampling (top-p) probability."
-)
+@click.option("--top-p", default=None, type=float, help="Default nucleus sampling (top-p) probability.")
 @click.option("--top-k", default=None, type=int, help="Default top-k sampling parameter.")
 @click.option("--min-p", default=None, type=float, help="Default min-p sampling parameter.")
 @click.option(
@@ -470,8 +454,7 @@ def launch(
     # ---- Single-handler mode (original behavior) ----
     if model_path is None:
         raise click.UsageError(
-            "Either --config (multi-handler YAML) or --model / --model-path "
-            "(single model) is required."
+            "Either --config (multi-handler YAML) or --model / --model-path (single model) is required."
         )
 
     args = MLXServerConfig(

@@ -9,14 +9,13 @@ the per-token dim with the mode declared by the model's
 so that the returned vector lives on the unit hypersphere (which is what
 cosine-similarity downstream consumers expect).
 """
+
 from __future__ import annotations
 
 import mlx.core as mx
 
 
-def apply_pooling(
-    hidden_states: mx.array, attention_mask: mx.array, mode: str
-) -> mx.array:
+def apply_pooling(hidden_states: mx.array, attention_mask: mx.array, mode: str) -> mx.array:
     """Pool a `(batch, seq, hidden)` tensor along the seq axis.
 
     Parameters
@@ -67,7 +66,9 @@ def apply_pooling(
     if mode == "max":
         # Set masked positions to a large negative bias so they can't win
         # the per-channel max. We don't mutate hidden_states.
-        mask_bias = (attention_mask[:, :, None] == 0).astype(hidden_states.dtype) * -1e9
+        # mypy: the `(arr == 0)` op returns `array | bool` in stubs, but at
+        # runtime it's always a broadcasted array — cast for the type checker.
+        mask_bias = (attention_mask[:, :, None] == 0).astype(hidden_states.dtype) * -1e9  # type: ignore[union-attr]
         return (hidden_states + mask_bias).max(axis=1)
 
     raise ValueError(f"unknown pooling mode: {mode!r}")

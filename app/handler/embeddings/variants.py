@@ -14,16 +14,13 @@ its parameter names match the HuggingFace nomic-bert layout exactly
 `SwiGLUMLP` here would force an extra `.mlp.mlp.*` prefix that breaks the
 safetensors key mapping.
 """
-from __future__ import annotations
 
-from typing import Tuple
+from __future__ import annotations
 
 import mlx.core as mx
 
 
-def rope_frequencies(
-    seq_len: int, head_dim: int, base: float = 10000.0
-) -> Tuple[mx.array, mx.array]:
+def rope_frequencies(seq_len: int, head_dim: int, base: float = 10000.0) -> tuple[mx.array, mx.array]:
     """Precompute cos/sin tables for Rotary Position Embedding.
 
     Args:
@@ -36,11 +33,8 @@ def rope_frequencies(
     """
     if head_dim % 2 != 0:
         raise ValueError(f"RoPE requires even head_dim, got {head_dim}")
-    half = head_dim // 2
-    # 1 / base ^ (2i / head_dim) for i in [0, half)
-    inv_freq = 1.0 / (
-        base ** (mx.arange(0, head_dim, 2).astype(mx.float32) / head_dim)
-    )
+    # 1 / base ^ (2i / head_dim) for i in [0, head_dim // 2)
+    inv_freq = 1.0 / (base ** (mx.arange(0, head_dim, 2).astype(mx.float32) / head_dim))
     positions = mx.arange(seq_len).astype(mx.float32)
     # Outer product: (seq_len, half)
     freqs = positions[:, None] * inv_freq[None, :]

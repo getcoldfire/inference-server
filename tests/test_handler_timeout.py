@@ -28,7 +28,6 @@ unit test) but exercise the exact code path on the handler side.
 
 from __future__ import annotations
 
-import asyncio
 from typing import Any
 
 import pytest
@@ -53,7 +52,7 @@ async def test_timeout_error_is_reported_as_504_not_500():
 
     class _SlowHandler:
         async def chat(self, *_args, **_kwargs):
-            raise asyncio.TimeoutError("simulated upstream timeout")
+            raise TimeoutError("simulated upstream timeout")
 
     request = {
         "id": "req-timeout-1",
@@ -93,7 +92,7 @@ async def test_timeout_error_does_not_kill_dispatcher():
         async def chat(self, *_args, **_kwargs):
             self.call_count += 1
             if self.call_count == 1:
-                raise asyncio.TimeoutError("first call times out")
+                raise TimeoutError("first call times out")
             return {"ok": True, "call": self.call_count}
 
     handler = _SometimesSlowHandler()

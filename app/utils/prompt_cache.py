@@ -2,15 +2,15 @@
 
 from __future__ import annotations
 
-from collections import deque
-from dataclasses import dataclass
 import gc
-from pathlib import Path
 import pickle
 import shutil
 import tempfile
-from typing import Any
 import uuid
+from collections import deque
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any
 
 from loguru import logger
 from mlx_lm.models.cache import can_trim_prompt_cache, trim_prompt_cache

@@ -271,8 +271,7 @@ class ModelEntryConfig:
         # KV cache quantization is LM-only
         if self.kv_bits is not None and self.model_type != "lm":
             logger.warning(
-                "KV cache quantization is only supported for 'lm'. "
-                "Ignoring for model '%s'.",
+                "KV cache quantization is only supported for 'lm'. Ignoring for model '%s'.",
                 self.model_path,
             )
             self.kv_bits = None

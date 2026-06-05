@@ -3,14 +3,14 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import AsyncIterator
-from dataclasses import dataclass
 import importlib
 import json
-from pathlib import Path
 import sys
 import types
 import unittest
+from collections.abc import AsyncIterator
+from dataclasses import dataclass
+from pathlib import Path
 
 
 def _load_mlx_lm_handler_class() -> type:
@@ -32,9 +32,7 @@ def _load_mlx_lm_handler_class() -> type:
         "app.utils.prompt_cache",
         "app.handler.mlx_lm",
     ]
-    original_modules: dict[str, types.ModuleType | None] = {
-        name: sys.modules.get(name) for name in module_names
-    }
+    original_modules: dict[str, types.ModuleType | None] = {name: sys.modules.get(name) for name in module_names}
 
     try:
         sys.modules["app.handler"] = fake_handler_package
@@ -175,9 +173,7 @@ class MixedThinkToolHandoffStreamHandlerIntegrationTests(unittest.TestCase):
         )
         assert reasoning_text == "before  after "
 
-        emitted_tool_calls = [
-            item for item in outputs if isinstance(item, dict) and isinstance(item.get("name"), str)
-        ]
+        emitted_tool_calls = [item for item in outputs if isinstance(item, dict) and isinstance(item.get("name"), str)]
         assert len(emitted_tool_calls) == 1
         assert emitted_tool_calls[0]["name"] == "read_file"
         assert json.loads(emitted_tool_calls[0]["arguments"]) == {"path": "/tmp/a.txt"}
@@ -211,8 +207,7 @@ class MixedThinkToolHandoffStreamHandlerIntegrationTests(unittest.TestCase):
                     token=203,
                 ),
                 _FakeStreamChunk(
-                    "<parameter=start_line>\n692\n</parameter>\n"
-                    "<parameter=end_line>\n790\n</parameter>\n",
+                    "<parameter=start_line>\n692\n</parameter>\n<parameter=end_line>\n790\n</parameter>\n",
                     token=204,
                 ),
                 _FakeStreamChunk("</function>\n</tool_call>\n</thinking>", token=205),
@@ -238,9 +233,7 @@ class MixedThinkToolHandoffStreamHandlerIntegrationTests(unittest.TestCase):
         )
         assert reasoning_text == "tail-check:\n"
 
-        emitted_tool_calls = [
-            item for item in outputs if isinstance(item, dict) and isinstance(item.get("name"), str)
-        ]
+        emitted_tool_calls = [item for item in outputs if isinstance(item, dict) and isinstance(item.get("name"), str)]
         assert len(emitted_tool_calls) == 1
         assert emitted_tool_calls[0]["name"] == "read_file"
         assert json.loads(emitted_tool_calls[0]["arguments"]) == {
@@ -356,9 +349,7 @@ class MixedThinkToolHandoffStreamHandlerIntegrationTests(unittest.TestCase):
         assert isinstance(parsed.get("tool_calls"), list)
         assert len(parsed["tool_calls"]) == 1
         assert parsed["tool_calls"][0]["name"] == "read_file"
-        assert json.loads(parsed["tool_calls"][0]["arguments"]) == {
-            "path": "app/handler/mlx_vlm.py"
-        }
+        assert json.loads(parsed["tool_calls"][0]["arguments"]) == {"path": "app/handler/mlx_vlm.py"}
         assert isinstance(parsed.get("content"), str)
         visible_content = parsed["content"]
         assert "preface before tool." in visible_content
@@ -386,8 +377,7 @@ class MixedThinkToolHandoffStreamHandlerIntegrationTests(unittest.TestCase):
                     token=303,
                 ),
                 _FakeStreamChunk(
-                    "<parameter=start_line>\n692\n</parameter>\n"
-                    "<parameter=end_line>\n790\n</parameter>\n",
+                    "<parameter=start_line>\n692\n</parameter>\n<parameter=end_line>\n790\n</parameter>\n",
                     token=304,
                 ),
                 _FakeStreamChunk("</function>\n</tool_call>\n", token=305),
@@ -406,9 +396,7 @@ class MixedThinkToolHandoffStreamHandlerIntegrationTests(unittest.TestCase):
 
         outputs = asyncio.run(_collect())
 
-        emitted_tool_calls = [
-            item for item in outputs if isinstance(item, dict) and isinstance(item.get("name"), str)
-        ]
+        emitted_tool_calls = [item for item in outputs if isinstance(item, dict) and isinstance(item.get("name"), str)]
         assert len(emitted_tool_calls) == 1
         assert emitted_tool_calls[0]["name"] == "read_file"
         assert json.loads(emitted_tool_calls[0]["arguments"]) == {
@@ -464,22 +452,15 @@ class MixedThinkToolHandoffStreamHandlerIntegrationTests(unittest.TestCase):
             for item in outputs
             if isinstance(item, dict) and isinstance(item.get("reasoning_content"), str)
         )
-        assert (
-            reasoning_text
-            == "I should inspect both handlers first.\nThen verify token usage fields."
-        )
+        assert reasoning_text == "I should inspect both handlers first.\nThen verify token usage fields."
 
-        emitted_tool_calls = [
-            item for item in outputs if isinstance(item, dict) and isinstance(item.get("name"), str)
-        ]
+        emitted_tool_calls = [item for item in outputs if isinstance(item, dict) and isinstance(item.get("name"), str)]
         assert len(emitted_tool_calls) == 1
         assert emitted_tool_calls[0]["name"] == "read_file"
         assert json.loads(emitted_tool_calls[0]["arguments"]) == {"path": "app/handler/mlx_vlm.py"}
 
         visible_content = "".join(item for item in outputs if isinstance(item, str)) + "".join(
-            item["content"]
-            for item in outputs
-            if isinstance(item, dict) and isinstance(item.get("content"), str)
+            item["content"] for item in outputs if isinstance(item, dict) and isinstance(item.get("content"), str)
         )
         assert "I should inspect both handlers first." not in visible_content
         assert "Then verify token usage fields." not in visible_content
@@ -530,15 +511,11 @@ class MixedThinkToolHandoffStreamHandlerIntegrationTests(unittest.TestCase):
         parsed = result["response"]
 
         assert isinstance(parsed, dict)
-        assert parsed["reasoning_content"] == (
-            "I should inspect both handlers first.\nThen verify token usage fields."
-        )
+        assert parsed["reasoning_content"] == ("I should inspect both handlers first.\nThen verify token usage fields.")
         assert isinstance(parsed.get("tool_calls"), list)
         assert len(parsed["tool_calls"]) == 1
         assert parsed["tool_calls"][0]["name"] == "read_file"
-        assert json.loads(parsed["tool_calls"][0]["arguments"]) == {
-            "path": "app/handler/mlx_vlm.py"
-        }
+        assert json.loads(parsed["tool_calls"][0]["arguments"]) == {"path": "app/handler/mlx_vlm.py"}
         content = parsed.get("content")
         if isinstance(content, str):
             assert "I should inspect both handlers first." not in content
@@ -593,9 +570,7 @@ class MixedThinkToolHandoffStreamHandlerIntegrationTests(unittest.TestCase):
         assert reasoning_text == ""
 
         visible_content = "".join(item for item in outputs if isinstance(item, str)) + "".join(
-            item["content"]
-            for item in outputs
-            if isinstance(item, dict) and isinstance(item.get("content"), str)
+            item["content"] for item in outputs if isinstance(item, dict) and isinstance(item.get("content"), str)
         )
         assert "I should inspect both handlers first." in visible_content
         assert "</think>" in visible_content
@@ -648,9 +623,7 @@ class MixedThinkToolHandoffStreamHandlerIntegrationTests(unittest.TestCase):
 
         outputs = asyncio.run(_collect())
 
-        emitted_tool_calls = [
-            item for item in outputs if isinstance(item, dict) and isinstance(item.get("name"), str)
-        ]
+        emitted_tool_calls = [item for item in outputs if isinstance(item, dict) and isinstance(item.get("name"), str)]
         assert len(emitted_tool_calls) == 1
         assert emitted_tool_calls[0]["name"] == "read_file"
         assert json.loads(emitted_tool_calls[0]["arguments"]) == {
@@ -703,9 +676,7 @@ class MixedThinkToolHandoffStreamHandlerIntegrationTests(unittest.TestCase):
 
         outputs = asyncio.run(_collect())
 
-        emitted_tool_calls = [
-            item for item in outputs if isinstance(item, dict) and isinstance(item.get("name"), str)
-        ]
+        emitted_tool_calls = [item for item in outputs if isinstance(item, dict) and isinstance(item.get("name"), str)]
         assert len(emitted_tool_calls) == 1
         assert emitted_tool_calls[0]["name"] == "read_file"
         assert json.loads(emitted_tool_calls[0]["arguments"]) == {

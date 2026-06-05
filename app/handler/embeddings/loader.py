@@ -12,14 +12,14 @@ Real HuggingFace repos use a handful of different weight-key conventions
 `attention.self.{query,key,value}`); `_remap_hf_to_internal` collapses those
 to the single key layout used by `app.handler.embeddings.encoder.BertModel`.
 """
+
 from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any, Optional, Tuple
+from typing import Any
 
 import mlx.core as mx
-import numpy as np
 from safetensors.numpy import load_file
 from transformers import AutoTokenizer
 
@@ -138,7 +138,7 @@ def _read_pooling_mode(model_dir: Path) -> str:
     return "cls"
 
 
-def _read_matryoshka_dim(model_dir: Path, cfg: dict[str, Any]) -> Optional[int]:
+def _read_matryoshka_dim(model_dir: Path, cfg: dict[str, Any]) -> int | None:
     """Resolve the matryoshka truncation dim, if declared.
 
     Two declaration sites supported, checked in this order:
@@ -269,7 +269,7 @@ def _remap_hf_to_internal(
 
 def load_embedding_model(
     model_path: str,
-) -> Tuple[BertModel, "AutoTokenizer", str, Optional[int]]:
+) -> tuple[BertModel, Any, str, int | None]:
     """Load a HuggingFace embedding model into an MLX `BertModel`.
 
     Parameters
@@ -309,9 +309,7 @@ def load_embedding_model(
     # needs to know whether the model is SwiGLU vs vanilla GeLU so it can
     # route ``mlp.fc2`` to the right destination (``mlp.down`` for SwiGLU,
     # ``output.dense`` for vanilla BERT).
-    remapped = _remap_hf_to_internal(
-        raw_weights, is_swiglu=(bert_cfg.hidden_act == "swiglu")
-    )
+    remapped = _remap_hf_to_internal(raw_weights, is_swiglu=(bert_cfg.hidden_act == "swiglu"))
     mlx_weights = {k: mx.array(v) for k, v in remapped.items()}
 
     model = BertModel(bert_cfg)

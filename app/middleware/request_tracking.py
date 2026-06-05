@@ -1,8 +1,8 @@
 """Request tracking middleware for correlation IDs and request logging."""
 
-from collections.abc import Awaitable, Callable
 import time
 import uuid
+from collections.abc import Awaitable, Callable
 
 from fastapi import Request, Response
 from loguru import logger
@@ -21,9 +21,7 @@ class RequestTrackingMiddleware(BaseHTTPMiddleware):
     - Logs request start/end with timing information
     """
 
-    async def dispatch(
-        self, request: Request, call_next: Callable[[Request], Awaitable[Response]]
-    ) -> Response:
+    async def dispatch(self, request: Request, call_next: Callable[[Request], Awaitable[Response]]) -> Response:
         """
         Process each request with correlation ID tracking.
 
@@ -46,9 +44,7 @@ class RequestTrackingMiddleware(BaseHTTPMiddleware):
 
         # Log request start
         start_time = time.time()
-        logger.info(
-            f"Request started: {request.method} {request.url.path} [request_id={request_id}]"
-        )
+        logger.info(f"Request started: {request.method} {request.url.path} [request_id={request_id}]")
 
         try:
             # Process request

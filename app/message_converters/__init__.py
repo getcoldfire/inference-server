@@ -39,11 +39,7 @@ def resolve_message_converter_name(
     """
     if converter_name is not None:
         normalized_converter_name = converter_name.lower()
-        return (
-            normalized_converter_name
-            if normalized_converter_name in MESSAGE_CONVERTER_MAP
-            else None
-        )
+        return normalized_converter_name if normalized_converter_name in MESSAGE_CONVERTER_MAP else None
 
     for parser_name in (tool_parser_name, reasoning_parser_name):
         if parser_name is None:

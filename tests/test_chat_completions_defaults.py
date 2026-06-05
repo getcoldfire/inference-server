@@ -21,9 +21,7 @@ def _load_refine_chat_completion_request() -> object:
         "app.handler.mlx_lm",
         "app.api.endpoints",
     ]
-    original_modules: dict[str, types.ModuleType | None] = {
-        name: sys.modules.get(name) for name in module_names
-    }
+    original_modules: dict[str, types.ModuleType | None] = {name: sys.modules.get(name) for name in module_names}
 
     try:
         sys.modules["app.handler.mlx_lm"] = fake_lm_module

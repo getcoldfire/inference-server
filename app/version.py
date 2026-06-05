@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
+import tomllib
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
-import tomllib
 from typing import Final
 
 PACKAGE_NAME: Final[str] = "mlx-openai-server"

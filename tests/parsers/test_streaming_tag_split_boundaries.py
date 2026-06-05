@@ -33,13 +33,7 @@ def test_function_parameter_tool_parser_handles_split_tool_open_tag() -> None:
 
     chunks = [
         "Prefix text <tool_",
-        (
-            "call>\n"
-            "<function=get_weather>\n"
-            '<parameter=city>"NYC"</parameter>\n'
-            "</function>\n"
-            "</tool_call>"
-        ),
+        ('call>\n<function=get_weather>\n<parameter=city>"NYC"</parameter>\n</function>\n</tool_call>'),
     ]
 
     parsed_outputs: list[dict[str, object]] = []
@@ -92,12 +86,7 @@ def test_function_parameter_tool_parser_recovers_missing_function_close() -> Non
     """Closed tool blocks without ``</function>`` should still parse tool calls."""
     parser = FunctionParameterToolParser()
 
-    output = (
-        "<tool_call>\n"
-        "<function=read_file>\n"
-        '<parameter=path>"/tmp/file.txt"</parameter>\n'
-        "</tool_call>"
-    )
+    output = '<tool_call>\n<function=read_file>\n<parameter=path>"/tmp/file.txt"</parameter>\n</tool_call>'
 
     parsed = parser.extract_tool_calls(output)
     assert isinstance(parsed, dict)
@@ -117,11 +106,7 @@ def test_function_parameter_tool_parser_allows_function_tag_spacing_drift() -> N
     parser = FunctionParameterToolParser()
 
     output = (
-        "<tool_call>\n"
-        "<function =read_file>\n"
-        '<parameter=path>"/tmp/file.txt"</parameter>\n'
-        "</function>\n"
-        "</tool_call>"
+        '<tool_call>\n<function =read_file>\n<parameter=path>"/tmp/file.txt"</parameter>\n</function>\n</tool_call>'
     )
 
     parsed = parser.extract_tool_calls(output)
@@ -141,11 +126,7 @@ def test_function_parameter_tool_parser_allows_parameter_tag_spacing_drift() -> 
     parser = FunctionParameterToolParser()
 
     output = (
-        "<tool_call>\n"
-        "<function=read_file>\n"
-        '<parameter =path>"/tmp/file.txt"</parameter>\n'
-        "</function>\n"
-        "</tool_call>"
+        '<tool_call>\n<function=read_file>\n<parameter =path>"/tmp/file.txt"</parameter>\n</function>\n</tool_call>'
     )
 
     parsed = parser.extract_tool_calls(output)
