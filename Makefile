@@ -14,7 +14,7 @@ MYPY ?= .venv/bin/mypy
 VENV_BIN ?= $(CURDIR)/.venv/bin
 export PATH := $(VENV_BIN):$(PATH)
 
-.PHONY: run install lint test test-smoke test-soak license-check release-check-quick release-check
+.PHONY: run install lint test test-smoke test-soak license-check release-check-quick release-check verify
 
 run:
 	mlx-server launch \
@@ -51,3 +51,9 @@ release-check-quick: lint test license-check test-smoke
 # release-check: full pre-tag gate; runs the 1.5h+ soak suite. Use ONLY before tagging.
 release-check: release-check-quick test-soak
 	@echo "Release check passed — safe to tag."
+
+# verify: user-facing install verification suite. Interactive menu by default;
+# pass FLAGS=--all (or --test N) for non-interactive use.
+# Example: make verify FLAGS=--all
+verify:
+	@./scripts/verify/run.sh $(FLAGS)
