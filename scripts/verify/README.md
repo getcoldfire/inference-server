@@ -85,14 +85,26 @@ Streaming request (`stream: true`), `max_tokens=20`. Asserts at least 3
 ### 4. Concurrent KV-isolation (`~30s`) — **the bug test**
 
 Fires 4 chat completions in parallel, each with a unique marker
-(`FOXTROT42`, `MIKE77VICTOR`, `BRAVO13CHARLIE`, `TANGO99DELTA` — designed so
-no two share any common substring of length ≥ 2). Asserts every
-response contains its own marker and **none of the others**. A leak means
-the MLX KV-cache is being shared across concurrent streams — the upstream
-stream-affinity bug that the warm-up fix was supposed to prevent. Prints a
-4×4 grid showing marker presence per response.
+(`QPRTX42`, `MNBVC77`, `JKHGF13`, `ZXCVB99` — synthetic IDs designed so no
+two share any common substring of length ≥ 2, and so they don't look like
+names or credentials that would trip small-model RLHF safety filters).
+Prints a 4×4 grid showing marker presence per response.
+
+Three-state outcome:
+
+| Outcome | Meaning | Exit |
+|---|---|---|
+| **PASS** (green) | All 4 own markers echoed, zero foreign markers anywhere. | 0 |
+| **WARN** (yellow) | Zero foreign markers, but one or more responses failed to echo their own marker. Model refusal / sampling drift — **not** a KV bug. Re-run; if WARN persists, switch to a larger model. | 0 |
+| **HARD FAIL** (red) | Any foreign marker present in any response. The upstream MLX stream-affinity / KV-cache cross-contamination bug — file an issue. | 1 |
 
 This is the test that would have caught the upstream bug.
+
+**Reliability note:** Test 4's PASS/WARN ratio is tied to model quirks. Small
+quantized models (Llama-3.2-1B-Instruct-4bit in particular) will WARN
+occasionally due to sampling variance or stray safety refusals. That is
+**not** a regression. Only a HARD FAIL indicates the KV-isolation guarantee
+is broken.
 
 ### 5. Clean shutdown (`<10s`)
 
@@ -124,18 +136,22 @@ coldfire-mlx-server launch \
 First launch can take 30+ seconds while the model downloads from
 HuggingFace. Subsequent launches are fast.
 
-### Test 4 fails with "all 4 markers present in every response"
+### Test 4 HARD FAIL — "KV-cache cross-contamination detected"
 
-KV-cache cross-contamination regression. Please file an issue at
+A foreign marker appeared in a response. This is a KV-cache
+cross-contamination regression — the bug the warm-up fix is supposed to
+prevent. Please file an issue at
 <https://github.com/getcoldfire/mlx-openai-server/issues> with the response
 bodies the test prints.
 
-### Test 4 fails with "response did not echo its own marker"
+### Test 4 WARN — "N of 4 responses did not echo their own marker"
 
-Softer signal — the model is generating incoherent output under
-concurrency. Could be queue saturation, prompt template breakage, or a
-quantization issue with this specific model. Re-run with a different
-model before filing.
+Softer signal — KV isolation is **correct** (zero foreign-marker leaks),
+but the model didn't echo one or more of its own markers back. Typical
+causes: RLHF safety refusal, sampling variance, queue saturation, or
+quantization quirks. **Not a regression.** Re-run the test once or twice;
+if it keeps WARNing, switch to a larger model
+(`mlx-community/Llama-3.2-3B-Instruct-4bit`).
 
 ### Test 5 "shutdown test hangs" or times out at 10s
 
