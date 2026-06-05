@@ -73,6 +73,48 @@ def test_empty_batch_returns_empty(service):
     assert result.total_tokens == 0
 
 
+def test_dimensions_arg_overrides_native_dim(service):
+    """Per-request `dimensions` truncates the output vector to that size.
+
+    Mirrors the OpenAI API's `dimensions` field on `/v1/embeddings`. Truncation
+    happens before L2 normalize so the returned vector stays unit-norm.
+    """
+    result = service.embed(["hello"], dimensions=16)
+    assert len(result.embeddings[0]) == 16
+    norm = math.sqrt(sum(x * x for x in result.embeddings[0]))
+    assert abs(norm - 1.0) < 1e-5
+
+
+def test_dimensions_arg_rejects_out_of_range(service):
+    """`dimensions=0` and `dimensions>hidden_size` both raise ValueError."""
+    with pytest.raises(ValueError, match="out of range"):
+        service.embed(["hello"], dimensions=0)
+    with pytest.raises(ValueError, match="out of range"):
+        service.embed(["hello"], dimensions=999)
+
+
+def test_dimensions_arg_overrides_model_matryoshka(tmp_path):
+    """Per-request `dimensions` beats the model-config `matryoshka_dim`.
+
+    OpenAI semantics: the request field always wins. Config says 16, request
+    says 8 -> output is 8-dim.
+    """
+    import json
+    import shutil
+
+    fixture_copy = tmp_path / "tiny_bert_matryoshka_override"
+    shutil.copytree(FIXTURE, fixture_copy)
+    cfg = json.loads((fixture_copy / "config.json").read_text())
+    cfg["matryoshka_dim"] = 16
+    (fixture_copy / "config.json").write_text(json.dumps(cfg))
+
+    svc = EmbeddingService(model_path=str(fixture_copy))
+    result = svc.embed(["hello"], dimensions=8)
+    assert len(result.embeddings[0]) == 8
+    norm = math.sqrt(sum(x * x for x in result.embeddings[0]))
+    assert abs(norm - 1.0) < 1e-5
+
+
 def test_matryoshka_truncates_before_normalize(tmp_path):
     """When matryoshka_dim is set in config.json, embeddings are truncated
     to that dim BEFORE L2 normalization.

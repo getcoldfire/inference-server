@@ -62,11 +62,24 @@ class EmbeddingService:
             self.matryoshka_dim,
         ) = load_embedding_model(model_path)
 
-    def embed(self, inputs: List[str]) -> EmbeddingResult:
+    def embed(self, inputs: List[str], dimensions: int | None = None) -> EmbeddingResult:
         """Embed a batch of input strings.
 
-        Empty `inputs` -> empty result (no tokenizer/model call). This keeps
-        the OpenAI `/v1/embeddings` happy when callers pass `[]`.
+        Parameters
+        ----------
+        inputs : List[str]
+            Input texts to embed. Empty list short-circuits to an empty
+            result with zero token counts.
+        dimensions : int | None, optional
+            Per-request matryoshka truncation. When set, overrides the
+            model-config ``matryoshka_dim`` for this call only — the
+            returned vectors will have ``dimensions`` components instead
+            of the model's native hidden size. Must be >0 and <= the
+            model's native dim. Truncation happens before L2 normalize
+            so cosine similarity stays well-defined.
+
+        Empty ``inputs`` -> empty result (no tokenizer/model call). This
+        keeps the OpenAI ``/v1/embeddings`` happy when callers pass ``[]``.
         """
         if not inputs:
             return EmbeddingResult(embeddings=[], prompt_tokens=0, total_tokens=0)
@@ -102,8 +115,19 @@ class EmbeddingService:
         # AFTER normalizing, the truncated vector would have norm < 1 and
         # downstream cosine similarity would be off. Truncating before lets
         # the final normalize step re-project onto the unit sphere.
-        if self.matryoshka_dim is not None:
-            pooled = pooled[:, : self.matryoshka_dim]
+        #
+        # Precedence: per-request `dimensions` overrides the model-config
+        # `matryoshka_dim`. This mirrors the OpenAI API behavior where the
+        # request field always wins.
+        effective_dim = dimensions if dimensions is not None else self.matryoshka_dim
+        if effective_dim is not None:
+            native_dim = pooled.shape[-1]
+            if effective_dim <= 0 or effective_dim > native_dim:
+                raise ValueError(
+                    f"dimensions={effective_dim} is out of range; "
+                    f"must be 1 <= dimensions <= {native_dim} (model native dim)"
+                )
+            pooled = pooled[:, :effective_dim]
 
         normalized = l2_normalize(pooled)
         prompt_tokens = int(attention_mask.sum().item())

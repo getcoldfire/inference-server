@@ -655,8 +655,20 @@ async def embeddings(
             )
 
         try:
-            embeddings = await handler.generate_embeddings_response(request)
-            return create_response_embeddings(embeddings, request.model, request.encoding_format)
+            result = await handler.generate_embeddings_response(request)
+            # Handler returns {"embeddings": [...], "usage": {...}} so the
+            # OpenAI response can surface token counts. Older handlers that
+            # still return a bare list[list[float]] are tolerated as a
+            # transitional shim.
+            if isinstance(result, dict):
+                embeddings = result.get("embeddings", [])
+                usage_dict = result.get("usage")
+            else:
+                embeddings = result
+                usage_dict = None
+            return create_response_embeddings(
+                embeddings, request.model, request.encoding_format, usage=usage_dict
+            )
         except HTTPException:
             raise
         except Exception as e:
@@ -669,7 +681,11 @@ async def embeddings(
 
 
 def create_response_embeddings(
-    embeddings: list[list[float]], model: str, encoding_format: Literal["float", "base64"] = "float"
+    embeddings: list[list[float]],
+    model: str,
+    encoding_format: Literal["float", "base64"] = "float",
+    *,
+    usage: dict[str, int] | None = None,
 ) -> EmbeddingResponse:
     """Create embedding response data from embeddings list.
 
@@ -681,6 +697,10 @@ def create_response_embeddings(
         Model name used for embeddings.
     encoding_format : Literal["float", "base64"], optional
         Encoding format for embeddings, by default "float".
+    usage : dict[str, int] | None, keyword-only
+        Token-count metadata from the handler, expected keys
+        ``prompt_tokens`` and ``total_tokens``. When ``None`` the
+        response's ``usage`` field is omitted (current behavior).
 
     Returns
     -------
@@ -699,7 +719,15 @@ def create_response_embeddings(
             )
         else:
             embeddings_response.append(EmbeddingResponseData(embedding=embedding, index=index))
-    return EmbeddingResponse(object="list", data=embeddings_response, model=model, usage=None)
+    usage_obj: UsageInfo | None = None
+    if usage is not None:
+        usage_obj = UsageInfo(
+            prompt_tokens=int(usage.get("prompt_tokens", 0)),
+            total_tokens=int(usage.get("total_tokens", usage.get("prompt_tokens", 0))),
+        )
+    return EmbeddingResponse(
+        object="list", data=embeddings_response, model=model, usage=usage_obj
+    )
 
 
 def create_response_chunk(

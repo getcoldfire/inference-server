@@ -98,13 +98,17 @@ class MLXEmbeddingsHandler:
 
     async def generate_embeddings_response(
         self, request: EmbeddingRequest
-    ) -> list[list[float]]:
-        """Embed `request.input` and return the list of vectors.
+    ) -> dict[str, Any]:
+        """Embed `request.input` and return ``{"embeddings": [...], "usage": {...}}``.
 
-        The OpenAI route in `app/api/endpoints.py` wraps this output into
-        an `EmbeddingResponse` with proper `data[i].embedding` shape and
-        `usage` (currently None — we plan to add usage on the route side
-        once the response wrapper supports it).
+        Returns a dict so the route handler can populate the OpenAI
+        ``usage`` block on the wire response. Shape:
+
+        ``{"embeddings": list[list[float]], "usage": {"prompt_tokens": int, "total_tokens": int}}``
+
+        Per-request ``dimensions`` is forwarded to the underlying
+        ``EmbeddingService.embed`` and overrides the model-config
+        matryoshka dim when provided.
 
         Raises HTTPException(500) on inference failure with an OpenAI-shape
         error body for consistent client behavior.
@@ -115,10 +119,18 @@ class MLXEmbeddingsHandler:
             else:
                 inputs = request.input
 
-            # Submit to the inference worker. We pass a no-arg callable
-            # because EmbeddingService.embed is the unit of work.
-            result = await self.inference_worker.submit(self.service.embed, inputs)
-            return result.embeddings
+            # Submit to the inference worker. We forward `dimensions` so
+            # per-request matryoshka truncation works end-to-end.
+            result = await self.inference_worker.submit(
+                self.service.embed, inputs, request.dimensions
+            )
+            return {
+                "embeddings": result.embeddings,
+                "usage": {
+                    "prompt_tokens": result.prompt_tokens,
+                    "total_tokens": result.total_tokens,
+                },
+            }
 
         except Exception as e:
             logger.error(f"Error in embeddings generation: {e!s}")
