@@ -1,24 +1,29 @@
-# Coldfire fork release workflow — triggered on tag push (v1.8.2, etc.).
+# Coldfire fork release workflow — triggered on tag push (v0.1.0, etc.).
 #
 # Sequence:
 #   1. Check out the tag.
 #   2. Create a venv on macos-latest (Apple Silicon) and install pinned
-#      runtime deps + pip-licenses + the package itself (editable so
-#      `poet` can introspect installed metadata).
+#      runtime deps + pip-licenses + the package itself.
 #   3. Run tools/generate_notices.sh -> NOTICES.txt.
 #   4. Run `make license-check` as the hard release gate; if a new
 #      transitive dependency picked up a copyleft license between the
 #      last CI run and the tag push, this fails before any artifact
 #      ships.
-#   5. Install homebrew-pypi-poet and emit Formula/resources.rb (the
-#      `resource` stanzas the Homebrew formula will reference).
-#   6. Create a GitHub Release for the tag, attach NOTICES.txt and
-#      Formula/resources.rb, auto-generate the release notes from the
-#      commit log since the last tag.
+#   5. Create a GitHub Release for the tag, attach NOTICES.txt + the
+#      requirements.lock from the tagged commit, auto-generate the
+#      release notes from the commit log since the last tag.
+#
+# Note: we deliberately do NOT emit Formula/resources.rb here even
+# though the original plan asked for it. The Homebrew formula uses
+# `virtualenv_create` + `pip install -r requirements.lock` rather
+# than `virtualenv_install_with_resources`, because three runtime
+# deps (mlx, mlx-metal, torch) are wheel-only on PyPI — they have no
+# sdist for `virtualenv_install_with_resources` to build from. The
+# pip-based path resolves wheels natively and works for Apple
+# Silicon out of the box.
 #
 # The Homebrew formula file itself is NOT pushed by this workflow —
-# Task 32/33 (Phase 9) handles the homebrew-coldfire tap bump using
-# the resources.rb attached to the release.
+# Task 32/33 (Phase 9) handles the homebrew-coldfire tap bump.
 
 name: release
 
@@ -52,18 +57,10 @@ jobs:
       - name: License gate
         run: make license-check
 
-      - name: Install homebrew-pypi-poet
-        run: .venv/bin/pip install homebrew-pypi-poet
-
-      - name: Generate Formula/resources.rb
-        run: |
-          mkdir -p Formula
-          .venv/bin/poet coldfire-mlx-server > Formula/resources.rb
-
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           files: |
             NOTICES.txt
-            Formula/resources.rb
+            requirements.lock
           generate_release_notes: true
