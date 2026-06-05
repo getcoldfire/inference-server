@@ -61,6 +61,29 @@ class EmbeddingService:
             self.pooling_mode,
             self.matryoshka_dim,
         ) = load_embedding_model(model_path)
+        # Force every lazy MLX allocation in the model to materialize on the
+        # *loader* thread (the subprocess main thread, where ``__init__`` is
+        # called). The inference worker thread later runs the model under
+        # *its* thread-local stream; without this warm-up, deferred
+        # allocations made on first use can capture a stream reference from
+        # the loader thread that the worker thread cannot resolve, surfacing
+        # as ``RuntimeError: There is no Stream(gpu, N) in current thread.``
+        # at the first ``embed(...)`` call. Mirror of the same workaround
+        # applied in ``app.core.batch_scheduler.BatchScheduler.start()``
+        # for the chat path.
+        self._warm_up()
+
+    def _warm_up(self) -> None:
+        """Run one trivial forward pass on the loader thread to flush lazy state."""
+        try:
+            # Encode the simplest possible non-empty input. ``"a"`` works for
+            # every tokenizer we ship with; the result is discarded.
+            self.embed(["a"])
+        except Exception:  # noqa: BLE001 — best-effort warm-up; surface later
+            # If warm-up fails the model is broken anyway; let the first real
+            # ``embed(...)`` call surface the same exception with the same
+            # traceback (which is more useful than a sanitized warm-up error).
+            pass
 
     def embed(self, inputs: List[str], dimensions: int | None = None) -> EmbeddingResult:
         """Embed a batch of input strings.

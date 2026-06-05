@@ -10,13 +10,7 @@ Two tests:
 
 * ``test_embeddings_nomic_v1_5_smoke`` — boots an embeddings server with the
   real ``nomic-ai/nomic-embed-text-v1.5`` HuggingFace model and verifies
-  768-dim L2-normalized vectors. Currently xfail: the model uses an HF weight
-  layout (``encoder.layers.X.attn.Wqkv``, ``mlp.fc11/fc12/fc2``,
-  ``emb_ln.{weight,bias}``, ``norm1``/``norm2`` per layer, ``hidden_act='silu'``
-  for nomic-style SwiGLU, missing ``position_embedding_type``) that the current
-  ``_remap_hf_to_internal`` doesn't fully cover. Promoting this test to a real
-  pass requires substantial loader work — see Phase 6 partial-delivery report
-  for the full remap diff needed.
+  768-dim L2-normalized vectors.
 """
 
 from __future__ import annotations
@@ -122,30 +116,9 @@ def test_embeddings_tiny_bert_smoke(tiny_bert_server: str) -> None:
         assert abs(norm - 1.0) < 1e-4, f"item {i}: L2 norm {norm} != 1.0"
 
 
-# nomic-embed-v1.5 smoke is xfailed. The real upstream HF repo
-# (`nomic-ai/nomic-embed-text-v1.5`) uses a weight key layout the current
-# `_remap_hf_to_internal` does not cover (see module docstring). Promoting
-# this test to a pass requires:
-#   * accept hidden_act='silu' as a swiglu trigger (nomic convention),
-#   * default position_embedding_type to 'rotary' when rotary_emb_fraction=1.0,
-#   * remap encoder.layers.X.attn.Wqkv → split QKV (already in remap),
-#   * remap encoder.layers.X.mlp.fc11/fc12 → gate/up; fc2 → down,
-#   * remap encoder.layers.X.norm1/norm2 → attention/mlp LayerNorms,
-#   * remap emb_ln.{weight,bias} → embeddings.LayerNorm.{weight,bias}.
-# Strict=False so a future loader fix flips this to xpassed.
-_NOMIC_REMAP_INCOMPLETE = (
-    "Loader's _remap_hf_to_internal does not cover nomic-embed-text-v1.5's "
-    "weight key layout (encoder.layers.X.attn.Wqkv / mlp.fc11/fc12/fc2 / "
-    "norm1/norm2; emb_ln.*; hidden_act='silu' as swiglu trigger; rotary "
-    "position embedding implied by rotary_emb_fraction=1.0). See module "
-    "docstring for the full remap diff required."
-)
-
-
 @requires_apple_silicon
 @pytest.mark.smoke
 @pytest.mark.integration
-@pytest.mark.xfail(reason=_NOMIC_REMAP_INCOMPLETE, strict=False)
 def test_embeddings_nomic_v1_5_smoke() -> None:
     """``/v1/embeddings`` against real nomic-embed-text-v1.5: 768-dim L2-norm."""
     port = _free_port()
