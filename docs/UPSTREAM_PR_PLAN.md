@@ -1,10 +1,61 @@
 # Upstream Contribution Plan: MLX Stream-Affinity Bug
 
-**Status:** Drafted — not yet filed. All content below is ready to submit when we choose to.
+**Status:** Drafted — not yet filed. **Plan revised 2026-06-05 after prior-art search; see "Prior Art" section below before acting on the original three-path proposal.**
 **Date drafted:** 2026-06-05
 **Coldfire fork commits implementing the fix:**
 - `8547c67` — BatchScheduler warm-up + main-loop stream wrap (chat path)
 - `c90e01d` — EmbeddingService warm-up (embeddings path), plus nomic-bert weight remap (separate concern; NOT being upstreamed — that's Coldfire-specific)
+
+---
+
+## Prior Art (added 2026-06-05) — READ FIRST
+
+A search of `ml-explore/mlx`, `ml-explore/mlx-lm`, and `cubist38/mlx-openai-server` turned up substantial existing reporting on this bug. The original three-path plan below was drafted before this search; **most of it should not be executed as written.** The revised recommendation lives in the new [Revised Status & Next Steps](#revised-status--next-steps-supersedes-original-status--next-steps-section) section at the bottom.
+
+### What already exists
+
+**`ml-explore/mlx-lm#1256` (OPEN, filed 2026-05-07)** — duplicate of what we would file.
+Same `RuntimeError: There is no Stream(gpu, 1) in current thread`, same `generate.py:1161` line, same stack trace. Author's root-cause diagnosis matches ours (module-level `generation_stream = mx.new_thread_local_stream(...)` binds to the importing thread). A vllm-mlx contributor confirmed in comments that it's not sliding-window-specific — any code path running generation on a non-loader thread hits it.
+Link: https://github.com/ml-explore/mlx-lm/issues/1256
+
+**`ml-explore/mlx-lm#1275` (OPEN, filed 2026-05-14, awaiting review, last touched 2026-06-04)** — proposed fix for #1256.
+Makes `generation_stream` a `threading.local()`-backed factory. 6 call sites updated. Includes `test_batch_sliding_window_threaded` covering the exact scenario. **Not yet merged.** If this lands, the `mlx_lm.server`-style symptom goes away — but our path (cubist38's `BatchScheduler` with its own per-worker stream) may still need the warm-up because the failure mode is lazy *model state* binding to a thread, not just the module-level stream.
+Link: https://github.com/ml-explore/mlx-lm/pull/1275
+
+**Closed history (so we understand maintainer cadence):**
+- `mlx-lm#1088` (closed Apr 2) — same `threading.local()` fix, closed in favor of #1090
+- `mlx-lm#1090` (MERGED Apr 22) — went with `ThreadLocalStream` instead. This is the "partial fix in v0.31.3" that #1256 explains is insufficient
+- `mlx-lm#1182` (closed Apr 22) — BatchGenerator-specific variant, also closed in favor of #1090
+
+**`ml-explore/mlx#3529` (CLOSED, 2026-05-11)** — Apple's stance on the root cause.
+Identical cross-thread lazy-eval failure. Maintainer **@zcbenz** replied:
+
+> "This is expected behavior because we don't support evaluating an array created in another thread. Two solutions: (1) inherit from `nn.Module` and call `mx.eval(model.parameters())` before passing to the worker, (2) create the class in the worker."
+
+**Our warm-up is essentially solution (1)** plus a forward pass to also force prompt-cache scaffolding to materialize. So Apple won't accept a new bug report — they consider this a documented contract, not a bug. Any framing that calls it a "bug in mlx" will be rejected.
+Link: https://github.com/ml-explore/mlx/issues/3529
+
+Also notable: `mlx#3391` (closed Apr 13) — auto-register-stream PR rejected by zcbenz with rationale about future queue semantics.
+
+**`cubist38/mlx-openai-server#290` (CLOSED, 2026-04-28)** — same bug reported against cubist38 directly.
+Multiple users (Qwen3.6-27B, Qwen3.6-35B-A3B, Darwin-36B, Gemma 4). Closed by **PR #295** (MERGED 2026-05-03) "Fix/lm thread affinity and batching policy" — added `--disable-batching`, gave `InferenceWorker` its own `new_thread_local_stream`, partitioned prompt-cache reuse by batch/nonbatch path, moved cache persistence onto the worker thread.
+
+**But #290 was closed prematurely.** Comment from `therealmobasha` on **2026-05-14**: *"Still running into this issue with gemma4 models even when using `--disable-batching`."* This matches our finding exactly — stream-management alone isn't enough; the lazy *model state* (notably downstream of `set_wired_limit`) also binds to whichever thread first triggers it, and only a forward-pass warm-up resolves that.
+Links: https://github.com/cubist38/mlx-openai-server/issues/290 , https://github.com/cubist38/mlx-openai-server/pull/295
+
+### What this changes about our plan
+
+1. **Do not file a new mlx-lm issue.** It duplicates #1256, which already has the same diagnosis and a community-confirmed scope. Filing a duplicate would split the conversation and likely get closed-as-duplicate.
+
+2. **Do not file a new mlx (core) issue.** Apple's position is documented in #3529. Reframing what is, per the maintainer, expected behavior as a bug will be rejected and may damage future credibility with the team.
+
+3. **Path B (cubist38 issue) should be reframed as a follow-up to closed #290**, not a fresh report. We have specific new information: (a) #295's fix is incomplete (point at the May 14 comment + our reproduction), (b) the structural fix is loader-thread warm-up of the model's lazy state, not just stream-management.
+
+4. **Path C (cubist38 PR) is the only path that ships net-new code.** Reframe the PR description to "completes the work begun in #295" — credit the prior PR, explain why per-thread streams alone don't cover the lazy-state path, position the warm-up as the structural complement.
+
+5. **Comment on mlx-lm#1256 and PR #1275** with our additional repro: that cubist38's `BatchScheduler` (with its own per-worker `new_thread_local_stream`) still fails *even if* PR #1275 lands, because the bug is in lazy *model* state, not the module-level stream. This is genuinely additive context for the mlx-lm maintainers reviewing #1275.
+
+The full prior-art-aware recommendation is in [Revised Status & Next Steps](#revised-status--next-steps-supersedes-original-status--next-steps-section) at the bottom. Everything between here and there is the original draft, preserved as reference content (the technical analysis and diagnostic content are still correct and reusable in the new framing).
 
 ---
 
@@ -598,3 +649,40 @@ When ready to file, the recommended sequence is:
 5. Respond to review feedback from cubist38 maintainers.
 
 Estimated effort: ~2 hours total once we start, assuming no major surprises. If cubist38 requests substantial test infrastructure additions, could grow to ~half a day.
+
+---
+
+## Revised Status & Next Steps (supersedes original Status & Next Steps section)
+
+Added 2026-06-05 after the prior-art search. Replaces the original five-step sequence above; if these conflict, follow this section.
+
+**Do not file new issues at `ml-explore/mlx` or `ml-explore/mlx-lm`. Do not file a fresh issue at `cubist38/mlx-openai-server` either — there is already a closed one (#290).** The single net-new contribution is the cubist38 PR.
+
+Recommended sequence:
+
+1. **Re-verify repro against current versions.** 10 minutes. `pip install -U mlx mlx-lm`, re-run the minimal repro from this doc, confirm the error still surfaces. Also check whether mlx-lm PR #1275 has merged in the meantime — if it has, re-run our cubist38 `BatchScheduler` repro with the updated mlx-lm to confirm warm-up is *still* needed (very likely yes, because the lazy model state path is separate from the `generation_stream` path #1275 fixes).
+
+2. **Comment on `mlx-lm#1256` and PR `mlx-lm#1275`.** ~30 minutes.
+   - On #1256: post our minimal repro showing the failure surfaces in cubist38's `BatchScheduler` even though it uses its own `new_thread_local_stream` per worker — i.e., the bug isn't purely about module-level `generation_stream`. Frame as supporting evidence that the symptom has multiple root paths.
+   - On #1275: ask whether the per-thread `generation_stream` fix covers the case where the scheduler thread owns its own stream entirely. If reviewers want a second test case, offer ours.
+   - Tone: contributing to existing work, not announcing competing work.
+
+3. **Submit the cubist38 PR (the only net-new code).** ~1 hour.
+   - **Reframe the description**: this PR completes the work begun in #295. Credit #295. Cite the May 14 #290 comment showing #295 was insufficient. Explain why per-thread streams alone don't cover the lazy-state path; explain why warm-up does.
+   - Reference `mlx#3529` showing this is the maintainer-blessed pattern (`mx.eval(model.parameters())` before crossing threads — our warm-up is a stronger form of this).
+   - Reference `mlx-lm#1256` and `#1275` as the related root-cause work upstream of cubist38.
+   - Ship: `BatchScheduler._warm_up_model()`, `EmbeddingService._warm_up()` (test against cubist38's mlx-embeddings code first — open question #5 in the original Open Decisions section above), the defensive `_run` main-loop `mx.stream(self._stream):` wrap, and the integration tests.
+   - The PR body / commit message in the original "Ready-To-Go Content" section above is still mostly reusable; rewrite the framing only.
+
+4. **Do NOT reopen `cubist38#290`.** Let the PR speak for itself; maintainers can reopen #290 themselves if they choose. Avoid contradicting their close decision in writing — let the PR be the followup.
+
+5. **Skip filing at mlx-lm and mlx entirely.** Sections "A1. mlx-lm issue body — DRAFT" and the corresponding submission step in the original plan are obsolete. The Path-A content remains in this document only as background for the cubist38 PR description and as reusable language if mlx-lm reviewers ask for elaboration.
+
+Estimated effort post-revision: ~1.5 hours total. Down from the original ~2h because we're cutting two filings.
+
+**Open decisions still pending from the original plan that this revision does not resolve:**
+- Identity (personal vs. org account) — original Open Decisions #1
+- Whether to ship tests in the same PR or separately — original Open Decisions #6
+- Verifying warm-up works against cubist38's `mlx-embeddings`-based embedding handler — original Open Decisions #5
+
+Resolve those before filing.
