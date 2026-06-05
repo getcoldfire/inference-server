@@ -176,3 +176,9 @@ cython_debug/
 
 # PyPI configuration file
 .pypirc
+
+# Generated release artifacts (built by tools/generate_notices.sh
+# and homebrew-pypi-poet in .github/workflows/release.yml; never
+# checked in to source).
+NOTICES.txt
+Formula/resources.rb

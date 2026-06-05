@@ -1,0 +1,69 @@
+# Coldfire fork release workflow — triggered on tag push (v1.8.2, etc.).
+#
+# Sequence:
+#   1. Check out the tag.
+#   2. Create a venv on macos-latest (Apple Silicon) and install pinned
+#      runtime deps + pip-licenses + the package itself (editable so
+#      `poet` can introspect installed metadata).
+#   3. Run tools/generate_notices.sh -> NOTICES.txt.
+#   4. Run `make license-check` as the hard release gate; if a new
+#      transitive dependency picked up a copyleft license between the
+#      last CI run and the tag push, this fails before any artifact
+#      ships.
+#   5. Install homebrew-pypi-poet and emit Formula/resources.rb (the
+#      `resource` stanzas the Homebrew formula will reference).
+#   6. Create a GitHub Release for the tag, attach NOTICES.txt and
+#      Formula/resources.rb, auto-generate the release notes from the
+#      commit log since the last tag.
+#
+# The Homebrew formula file itself is NOT pushed by this workflow —
+# Task 32/33 (Phase 9) handles the homebrew-coldfire tap bump using
+# the resources.rb attached to the release.
+
+name: release
+
+on:
+  push:
+    tags: ['v*.*.*']
+
+jobs:
+  release:
+    runs-on: macos-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Create venv and install
+        run: |
+          python -m venv .venv
+          .venv/bin/pip install --upgrade pip
+          .venv/bin/pip install -r requirements.lock pip-licenses
+          # Editable install so `pip-licenses` sees the package + `poet`
+          # can introspect our installed metadata to emit resources.rb.
+          .venv/bin/pip install -e . --no-deps
+
+      - name: Generate NOTICES.txt
+        run: bash tools/generate_notices.sh
+
+      - name: License gate
+        run: make license-check
+
+      - name: Install homebrew-pypi-poet
+        run: .venv/bin/pip install homebrew-pypi-poet
+
+      - name: Generate Formula/resources.rb
+        run: |
+          mkdir -p Formula
+          .venv/bin/poet coldfire-mlx-server > Formula/resources.rb
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            NOTICES.txt
+            Formula/resources.rb
+          generate_release_notes: true
