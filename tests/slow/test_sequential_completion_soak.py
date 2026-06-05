@@ -58,9 +58,10 @@ def test_100_sequential_completions(chat_server: tuple[str, int]) -> None:
     rss_growth_mb = (final_rss - baseline_rss) / (1024 * 1024)
 
     sorted_latencies = sorted(latencies)
-    # 100 samples — index 50 is roughly p50 (median-ish), index 99 is p99
-    p50 = sorted_latencies[50]
-    p99 = sorted_latencies[99]
+    # 100 samples — index 49 is the true p50 (lower median), index 98 is p99.
+    # (Index 99 would be the max / p100, not p99.)
+    p50 = sorted_latencies[49]
+    p99 = sorted_latencies[98]
     p_min = sorted_latencies[0]
     p_max = sorted_latencies[-1]
 
