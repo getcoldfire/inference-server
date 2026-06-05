@@ -232,7 +232,7 @@ show_menu() {
         if [ "$capability" != "embeddings" ]; then
           skip "test 6 requires a separate embedding server (current capability: $capability)"
           info "launch one with: coldfire-mlx-server launch --port 8081 \\"
-          info "    --model-path mlx-community/nomic-embed-text-v1.5-4bit --model-type embeddings"
+          info "    --model-path nomic-ai/nomic-embed-text-v1.5 --model-type embeddings"
           info "then re-run with: COLDFIRE_PORT=8081 $0"
         else
           run_test 6

@@ -26,7 +26,7 @@ if [ "$capability" != "embeddings" ]; then
   info ""
   info "launch one with:"
   info "  coldfire-mlx-server launch --port 8081 \\"
-  info "    --model-path mlx-community/nomic-embed-text-v1.5-4bit --model-type embeddings"
+  info "    --model-path nomic-ai/nomic-embed-text-v1.5 --model-type embeddings"
   info "then re-run with:"
   info "  COLDFIRE_PORT=8081 $0"
   exit 0
