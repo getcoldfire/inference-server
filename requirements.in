@@ -1,0 +1,15 @@
+# requirements.in — source for `requirements.lock` (deterministic runtime deps).
+#
+# This file pins ONLY runtime dependencies — dev/test tools (pytest, ruff,
+# mypy, pip-tools itself, sentence-transformers, etc.) come from the
+# [dependency-groups.dev] table in pyproject.toml and are intentionally NOT
+# locked here so that `pip install -r requirements.lock` produces a clean
+# runtime-only install for production deployments.
+#
+# Regenerate the lockfile with:
+#   .venv/bin/pip-compile requirements.in --output-file requirements.lock --resolver=backtracking
+#
+# The lockfile is consumed by:
+#   - Production Docker / Homebrew bottle builds (deterministic deploys)
+#   - tools/license_check.py (gates merges on licence-safe transitive deps)
+-e .
