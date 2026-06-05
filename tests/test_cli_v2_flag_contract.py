@@ -131,6 +131,38 @@ def test_licenses_flag_prints_and_exits_zero(
     assert ("NOTICES" in result.output) or ("third-party" in result.output)
 
 
+def test_licenses_finds_homebrew_layout(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Any,
+) -> None:
+    """``--licenses`` discovers a ``NOTICES.txt`` in the Homebrew share/doc layout.
+
+    Mocks ``sys.prefix`` to point at a fake ``Cellar/<formula>/<ver>/libexec``
+    and drops a NOTICES.txt at the canonical Homebrew location at
+    ``<formula_prefix>/share/doc/coldfire-mlx-server/``. The candidate-path
+    lookup should pick it up ahead of the source-tree fallback.
+    """
+    # Build the fake brew prefix tree under tmp_path.
+    fake_cellar = tmp_path / "Cellar" / "coldfire-mlx-server" / "1.8.1"
+    fake_libexec = fake_cellar / "libexec"
+    fake_libexec.mkdir(parents=True)
+    doc_dir = fake_cellar / "share" / "doc" / "coldfire-mlx-server"
+    doc_dir.mkdir(parents=True)
+    notices_path = doc_dir / "NOTICES.txt"
+    expected_text = "FAKE BREW NOTICES — this is the bundled NOTICES.txt\n"
+    notices_path.write_text(expected_text)
+
+    cli_module = _load_cli_module(monkeypatch)
+    # Point sys.prefix at the fake libexec so the brew candidate
+    # (`sys.prefix.parent / share/doc/...`) resolves into our tmp tree.
+    monkeypatch.setattr(cli_module.sys, "prefix", str(fake_libexec))
+
+    runner = CliRunner()
+    result = runner.invoke(cli_module.cli, ["--licenses"])
+    assert result.exit_code == 0, result.output
+    assert "FAKE BREW NOTICES" in result.output, f"expected brew layout NOTICES to be picked up; got: {result.output!r}"
+
+
 def test_missing_model_raises_usage_error(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

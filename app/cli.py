@@ -90,6 +90,37 @@ logger.add(
 )
 
 
+def _candidate_notices_paths() -> list[Path]:
+    """Return the ordered list of locations where ``NOTICES.txt`` may live.
+
+    Order is most-specific-deployment-first so a Homebrew install wins
+    over a source checkout when both happen to exist (e.g. a developer
+    who ``brew install``ed and also has the repo cloned).
+
+    1. ``<formula_prefix>/share/doc/coldfire-mlx-server/NOTICES.txt`` —
+       the canonical Homebrew Cellar layout. Homebrew Python formulas
+       create a venv at ``<formula_prefix>/libexec``, so ``sys.prefix``
+       points at that ``libexec`` directory and ``sys.prefix.parent`` is
+       the formula prefix (e.g. ``Cellar/coldfire-mlx-server/1.8.1/``).
+    2. ``<sys.prefix>/share/doc/coldfire-mlx-server/NOTICES.txt`` — for
+       installs where the venv lives at the formula prefix directly
+       (some Homebrew Python recipes do this instead of using
+       ``libexec``).
+    3. Repo root next to the source — fallback for source checkouts and
+       editable installs (current behavior).
+    """
+    notices_name = "NOTICES.txt"
+    brew_doc_subpath = Path("share") / "doc" / "coldfire-mlx-server" / notices_name
+    return [
+        # Homebrew Cellar libexec layout: $(prefix)/libexec  →  $(prefix)/share/doc/...
+        Path(sys.prefix).parent / brew_doc_subpath,
+        # Direct prefix layout: $(prefix)/share/doc/...
+        Path(sys.prefix) / brew_doc_subpath,
+        # Source checkout / editable install — file sits next to pyproject.toml.
+        Path(__file__).resolve().parent.parent / notices_name,
+    ]
+
+
 def _print_licenses_and_exit(ctx: click.Context, _param: click.Parameter, value: bool) -> None:
     """Print the bundled third-party NOTICES.txt (if present) and exit.
 
@@ -99,18 +130,22 @@ def _print_licenses_and_exit(ctx: click.Context, _param: click.Parameter, value:
     is absent (e.g. running from a source checkout outside a release
     tarball), a fallback message is printed so the flag never crashes
     the CLI.
+
+    Looks for ``NOTICES.txt`` in several candidate locations to support
+    both source checkouts and Homebrew installs (see
+    ``_candidate_notices_paths``).
     """
     if not value or ctx.resilient_parsing:
         return
-    notices = Path(__file__).resolve().parent.parent / "NOTICES.txt"
-    if notices.exists():
-        click.echo(notices.read_text())
-    else:
-        click.echo(
-            "NOTICES.txt not bundled in this build — run from a release tarball "
-            "to see full third-party license attributions. The top-level NOTICE "
-            "file describes the upstream fork relationship."
-        )
+    for notices in _candidate_notices_paths():
+        if notices.exists():
+            click.echo(notices.read_text())
+            ctx.exit(0)
+    click.echo(
+        "NOTICES.txt not bundled in this build — run from a release tarball "
+        "or a `brew install` to see full third-party license attributions. "
+        "The top-level NOTICE file describes the upstream fork relationship."
+    )
     ctx.exit(0)
 
 
