@@ -21,6 +21,7 @@ import gc
 import sys
 import time
 from contextlib import asynccontextmanager
+from dataclasses import asdict
 from typing import Any
 
 import uvicorn
@@ -33,6 +34,7 @@ from .api.endpoints import router
 from .config import MLXServerConfig, ModelEntryConfig, MultiModelServerConfig
 from .core.handler_process import HandlerProcessProxy
 from .core.model_registry import ModelRegistry
+from .core.registration import register_on_demand_one
 from .version import __version__
 
 _SAMPLING_DEFAULT_FIELDS: tuple[str, ...] = (
@@ -314,8 +316,6 @@ def create_multi_lifespan(config: MultiModelServerConfig):
 
                 # Serialize the dataclass config to a plain dict for
                 # pickling across the spawn boundary.
-                from dataclasses import asdict
-
                 model_cfg_dict = asdict(model_cfg)
 
                 queue_config = {
@@ -326,7 +326,8 @@ def create_multi_lifespan(config: MultiModelServerConfig):
                 if model_cfg.on_demand:
                     # Register on-demand model without spawning a subprocess.
                     # It will be loaded dynamically when a request arrives.
-                    await registry.register_on_demand_model(
+                    await register_on_demand_one(
+                        registry,
                         model_id=model_id,
                         model_cfg_dict=model_cfg_dict,
                         model_type=model_cfg.model_type,
@@ -335,7 +336,6 @@ def create_multi_lifespan(config: MultiModelServerConfig):
                         queue_config=queue_config,
                         idle_timeout=model_cfg.on_demand_idle_timeout,
                     )
-                    logger.info(f"Model '{model_id}' registered as on-demand (will load when first requested)")
                     continue
 
                 logger.info(
@@ -452,6 +452,15 @@ def setup_server(config_args: MLXServerConfig | MultiModelServerConfig) -> uvico
     )
 
     app.include_router(router)
+
+    # Admin endpoints (POST /admin/models/add, DELETE /admin/models/{id})
+    # are exposed only in multi-handler mode — single-handler mode lacks
+    # the ModelRegistry surface they depend on.
+    if isinstance(config_args, MultiModelServerConfig):
+        from .api.admin_models import router as admin_router
+
+        app.include_router(admin_router)
+        logger.info("Admin endpoints mounted: POST /admin/models/add, DELETE /admin/models/{model_id:path}")
 
     # Add CORS middleware
     app.add_middleware(
