@@ -18,6 +18,16 @@ from loguru import logger
 from ..schemas.model import ModelMetadata
 
 
+class ServingActiveError(Exception):
+    """Raised by ModelRegistry.unregister_model when the model has
+    in-flight requests (ref count > 0). The DELETE admin endpoint
+    catches this and returns 409."""
+
+    def __init__(self, model_id: str) -> None:
+        super().__init__(f"Model {model_id!r} is currently serving a request")
+        self.model_id = model_id
+
+
 class ModelRegistry:
     """Registry for managing model handlers.
 
@@ -119,6 +129,14 @@ class ModelRegistry:
         """Return sorted list of all known model IDs (loaded + on-demand)."""
         return sorted(set(self._handlers.keys()) | set(self._on_demand_configs.keys()))
 
+    def is_serving_active(self, model_id: str) -> bool:
+        """Lock-free read of the on-demand ref count. For IPC/status
+        surfaces ONLY — DELETE uses the in-lock check inside
+        unregister_model. Returns False for resident models (no per-
+        request counter at v0.1.1) and unknown IDs.
+        """
+        return self._on_demand_ref_count.get(model_id, 0) > 0
+
     def list_models(self) -> list[dict[str, Any]]:
         """List all registered models with metadata.
 
@@ -160,32 +178,62 @@ class ModelRegistry:
         return self._metadata[model_id]
 
     async def unregister_model(self, model_id: str) -> None:
-        """Unregister a model and clean up its handler.
+        """Unregister a model and tear down its handler.
 
-        Parameters
-        ----------
-        model_id : str
-            Model identifier.
+        Acquires BOTH locks (``_lock`` for the metadata map,
+        ``_on_demand_load_lock`` for the on-demand load/unload state) so
+        the check-and-unregister sequence is atomic against a concurrent
+        ``ensure_on_demand_loaded`` (which mutates ``_on_demand_ref_count``
+        under ``_on_demand_load_lock``). Without the dual lock, a request
+        arriving between the refcount check and the handler teardown
+        would orphan the just-spawned handler subprocess.
 
         Raises
         ------
         KeyError
-            If ``model_id`` is not found.
+            If ``model_id`` is not in either resident handlers or the
+            on-demand config table.
+        ServingActiveError
+            If ``_on_demand_ref_count[model_id] > 0`` — the DELETE
+            endpoint surfaces this as 409.
         """
-        async with self._lock:
-            if model_id not in self._handlers:
+        async with self._lock, self._on_demand_load_lock:
+            # Check serving-active INSIDE the locks — no TOCTOU window.
+            if self._on_demand_ref_count.get(model_id, 0) > 0:
+                raise ServingActiveError(model_id)
+
+            in_handlers = model_id in self._handlers
+            in_on_demand = model_id in self._on_demand_configs
+            if not in_handlers and not in_on_demand:
                 raise KeyError(f"Model '{model_id}' not found in registry")
 
-            handler = self._handlers[model_id]
-            if hasattr(handler, "cleanup"):
-                try:
-                    await handler.cleanup()
-                    logger.info(f"Cleaned up handler for model: {model_id}")
-                except Exception as e:
-                    logger.error(f"Error cleaning up handler for '{model_id}': {e}")
+            # Cancel pending idle-unload task before handler cleanup so it
+            # can't race against the teardown. Yield once so the
+            # cancellation actually propagates before we tear the
+            # handler down (a freshly-cancelled task stays in PENDING
+            # state until the event loop runs it once).
+            idle_task = self._on_demand_idle_tasks.pop(model_id, None)
+            if idle_task is not None and not idle_task.done():
+                idle_task.cancel()
+                await asyncio.sleep(0)
 
-            del self._handlers[model_id]
-            del self._metadata[model_id]
+            # Tear down the live handler (resident or loaded-on-demand).
+            if in_handlers:
+                handler = self._handlers[model_id]
+                if hasattr(handler, "cleanup"):
+                    try:
+                        await handler.cleanup()
+                        logger.info(f"Cleaned up handler for model: {model_id}")
+                    except Exception as e:
+                        logger.error(f"Error cleaning up handler for '{model_id}': {e}")
+                del self._handlers[model_id]
+
+            # Bookkeeping cleanup — pop all on-demand state regardless of load state.
+            self._metadata.pop(model_id, None)
+            self._on_demand_configs.pop(model_id, None)
+            self._on_demand_loaded.discard(model_id)
+            self._on_demand_ref_count.pop(model_id, None)
+            self._on_demand_idle_timeouts.pop(model_id, None)
             logger.info(f"Unregistered model: {model_id}")
 
     async def cleanup_all(self) -> None:
