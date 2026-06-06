@@ -19,8 +19,9 @@ from http import HTTPStatus
 from fastapi import APIRouter, HTTPException, Request
 from loguru import logger
 
+from ..core.model_registry import ServingActiveError
 from ..core.registration import register_on_demand_one
-from ..schemas.admin import AddModelRequest, AddModelResponse
+from ..schemas.admin import AddModelRequest, AddModelResponse, DeleteModelResponse
 
 router = APIRouter(prefix="/admin/models", tags=["admin"])
 
@@ -88,3 +89,40 @@ async def add_model(req: AddModelRequest, request: Request) -> AddModelResponse:
 
     meta = registry.get_metadata(model_id)
     return AddModelResponse(id=meta.id, type=meta.type, created_at=meta.created_at)
+
+
+@router.delete("/{model_id:path}", response_model=DeleteModelResponse)
+async def delete_model(model_id: str, request: Request) -> DeleteModelResponse:
+    """Hot-remove a model. 200 on success; 404 if not registered;
+    409 if currently mid-request.
+
+    The path converter ``{model_id:path}`` is required so HF-style
+    IDs containing ``/`` route correctly.
+    """
+    registry = getattr(request.app.state, "registry", None)
+    if registry is None:
+        raise HTTPException(
+            status_code=HTTPStatus.SERVICE_UNAVAILABLE,
+            detail="Multi-handler mode is not active (no ModelRegistry)",
+        )
+
+    try:
+        await registry.unregister_model(model_id)
+    except ServingActiveError as e:
+        raise HTTPException(
+            status_code=HTTPStatus.CONFLICT,
+            detail=f"Model '{e.model_id}' is currently serving a request; retry shortly",
+        ) from e
+    except KeyError:
+        raise HTTPException(
+            status_code=HTTPStatus.NOT_FOUND,
+            detail=f"Model '{model_id}' is not registered",
+        )
+    except Exception as e:
+        logger.exception(f"delete_model failed for '{model_id}'")
+        raise HTTPException(
+            status_code=HTTPStatus.INTERNAL_SERVER_ERROR,
+            detail=f"Unregister failed: {e}",
+        ) from e
+
+    return DeleteModelResponse(id=model_id)
