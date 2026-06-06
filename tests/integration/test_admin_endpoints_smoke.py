@@ -13,19 +13,20 @@ from __future__ import annotations
 import os
 import re
 import subprocess
-import time
+import tempfile
 from pathlib import Path
 
 import httpx
 import pytest
+
+from .conftest import _free_port, _teardown_server, _wait_for_healthz
 
 pytestmark = pytest.mark.skipif(
     os.environ.get("COLDFIRE_MLX_INTEGRATION") != "1",
     reason="set COLDFIRE_MLX_INTEGRATION=1 to run; spawns real subprocess + HF",
 )
 
-FIXTURE = Path(__file__).parent.parent / "fixtures" / "admin_smoke_config.yaml"
-PORT = 11436
+FIXTURE_TEMPLATE = Path(__file__).parent.parent / "fixtures" / "admin_smoke_config.yaml"
 
 
 def _assert_min_version(min_major: int, min_minor: int, min_patch: int) -> None:
@@ -44,26 +45,42 @@ def _assert_min_version(min_major: int, min_minor: int, min_patch: int) -> None:
 @pytest.fixture(scope="module")
 def server():
     _assert_min_version(0, 1, 1)
-    proc = subprocess.Popen(
-        ["coldfire-mlx-server", "launch", "--config", str(FIXTURE)],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-    )
-    deadline = time.time() + 120
-    while time.time() < deadline:
+
+    # Template the fixture YAML with an ephemeral port so parallel runs and
+    # leftover servers from prior runs don't collide. Also keeps log_level
+    # at WARNING (set in the template) to avoid PIPE-deadlock from INFO spam.
+    port = _free_port()
+    template = FIXTURE_TEMPLATE.read_text()
+    rendered = template.replace("__PORT__", str(port))
+
+    tmp = tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False, encoding="utf-8")
+    try:
+        tmp.write(rendered)
+        tmp.flush()
+        tmp.close()
+
+        # stderr -> STDOUT so a single drain handles both; stdout -> DEVNULL
+        # so a long-running server (≥120s with chat completions) can't fill
+        # the ~64KB pipe buffer and deadlock. WARNING level keeps this quiet
+        # anyway, but DEVNULL is belt-and-suspenders.
+        proc = subprocess.Popen(
+            ["coldfire-mlx-server", "launch", "--config", tmp.name],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
         try:
-            r = httpx.get(f"http://127.0.0.1:{PORT}/healthz", timeout=1.0)
-            if r.status_code == 200:
-                break
-        except httpx.HTTPError:
-            pass
-        time.sleep(1)
-    else:
-        proc.terminate()
-        pytest.fail("server did not become healthy within 120s")
-    yield f"http://127.0.0.1:{PORT}"
-    proc.terminate()
-    proc.wait(timeout=10)
+            # _wait_for_healthz polls /healthz and bails early if the
+            # subprocess exits (proc.poll() != None), so a crash at second 2
+            # doesn't burn the full 120s timeout.
+            if not _wait_for_healthz(port, proc, timeout=120.0):
+                _teardown_server(proc)
+                pytest.fail(f"server did not become healthy on :{port} within 120s")
+
+            yield f"http://127.0.0.1:{port}"
+        finally:
+            _teardown_server(proc)
+    finally:
+        Path(tmp.name).unlink(missing_ok=True)
 
 
 def test_hot_add_then_chat_then_remove(server: str):
