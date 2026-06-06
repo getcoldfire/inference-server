@@ -49,3 +49,14 @@ pip install --group dev   # requires pip >= 25.1
 
 The Coldfire Phase 8a `Makefile` work should encode this so contributors do not hit the same
 trap.
+
+## Coldfire-specific endpoints (not in upstream cubist38/mlx-openai-server)
+
+- `POST /admin/models/add` (since v0.1.1) — hot-add an on-demand model.
+  v0.1.1 accepts `on_demand: true` only; resident hot-add deferred to v0.1.2.
+- `DELETE /admin/models/{model_id:path}` (since v0.1.1) — hot-remove. Path
+  converter accepts slash-containing IDs. 409 if model is mid-request.
+
+Loopback-only at v0.1.1; no admin auth. Required by cli-v2 Phase 8 for
+`coldfire-ctl models install/remove` without restarting the fork subprocess.
+Not yet submitted to upstream cubist38.
