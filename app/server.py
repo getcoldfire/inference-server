@@ -453,6 +453,15 @@ def setup_server(config_args: MLXServerConfig | MultiModelServerConfig) -> uvico
 
     app.include_router(router)
 
+    # Admin endpoints (POST /admin/models/add, DELETE /admin/models/{id})
+    # are exposed only in multi-handler mode — single-handler mode lacks
+    # the ModelRegistry surface they depend on.
+    if isinstance(config_args, MultiModelServerConfig):
+        from .api.admin_models import router as admin_router
+
+        app.include_router(admin_router)
+        logger.info("Admin endpoints mounted: POST /admin/models/add, DELETE /admin/models/{model_id:path}")
+
     # Add CORS middleware
     app.add_middleware(
         CORSMiddleware,
