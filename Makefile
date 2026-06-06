@@ -14,7 +14,7 @@ MYPY ?= .venv/bin/mypy
 VENV_BIN ?= $(CURDIR)/.venv/bin
 export PATH := $(VENV_BIN):$(PATH)
 
-.PHONY: run install lint test test-smoke test-soak license-check release-check-quick release-check verify
+.PHONY: run install lint test test-smoke test-admin-smoke test-soak license-check release-check-quick release-check verify
 
 run:
 	mlx-server launch \
@@ -37,6 +37,9 @@ test:
 
 test-smoke:
 	$(PYTEST) tests/integration/ -m smoke -v
+
+test-admin-smoke:  ## Hot-add admin integration smoke (Apple Silicon + HF cache; needs v0.1.1+)
+	COLDFIRE_MLX_INTEGRATION=1 $(PYTEST) tests/integration/test_admin_endpoints_smoke.py -v
 
 test-soak:
 	$(PYTEST) tests/slow/ -m slow -v
