@@ -3,7 +3,7 @@
 Subcommands:
   - models list   (Task 4)
   - models pull   (Task 5)
-  - models rm     (Task 6 — pending)
+  - models rm     (Task 6)
 
 Wired into the main `cli` group via `cli.add_command(models)` in app/cli.py.
 """
@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json as _json
 import os
+import shutil
 from datetime import UTC, datetime
 
 import click
@@ -19,7 +20,7 @@ from huggingface_hub import snapshot_download
 from huggingface_hub.errors import HfHubHTTPError, RepositoryNotFoundError
 
 from app.utils.hf_cache import MLX_SUPPORTED_MODEL_TYPES, cache_path_for, list_cached_models
-from app.utils.server_probe import serving_model_ids
+from app.utils.server_probe import is_model_serving, serving_model_ids
 
 
 @click.group(name="models")
@@ -243,3 +244,63 @@ def models_pull(hf_id: str, quiet: bool, include: tuple[str, ...], exclude: tupl
             "⚠ Reminder: this repo is not MLX-quantized; `models install` of this id will fail.",
             err=True,
         )
+
+
+def _lookup_size_bytes(hf_id: str) -> int:
+    """Return huggingface_hub.scan_cache_dir's size_on_disk for hf_id,
+    or 0 if not found. Used for the 'freed N GB' message in `rm`.
+
+    Avoids a manual tree walk (and the Python 3.13-only
+    `Path.is_file(follow_symlinks=)` we'd otherwise want for HF's
+    blob-symlinks layout). The list is typically <100 entries.
+    """
+    for row in list_cached_models(mlx_only=False):
+        if row.name == hf_id:
+            return row.size_bytes
+    return 0
+
+
+@models.command("rm")
+@click.argument("hf_id")
+@click.option(
+    "--force",
+    is_flag=True,
+    help="Delete even if the model is currently being served by a running fork.",
+)
+@click.option(
+    "--port",
+    default=8000,
+    type=int,
+    show_default=True,
+    help="Port to probe for the serving safety check. "
+    "Default matches `coldfire-mlx-server launch --port` (8000); "
+    "cli-v2-daemon-launched forks listen on 11435.",
+)
+def models_rm(hf_id: str, force: bool, port: int) -> None:
+    """Delete a model from the local HuggingFace cache.
+
+    Refuses by default if a coldfire-mlx-server on 127.0.0.1:<port>
+    is currently advertising the model — stop the server first or
+    pass --force. This is a cache-only operation; it does NOT
+    unregister the model from a running fork. To remove the
+    registration AND the cache entry, use `coldfire-ctl models remove`.
+    """
+    path = cache_path_for(hf_id)
+    if path is None:
+        click.echo(f"model {hf_id!r} is not in the local cache")
+        raise SystemExit(1)
+
+    if not force and is_model_serving(hf_id, port=port):
+        click.echo(
+            f"refusing to remove {hf_id!r}: currently being served by "
+            f"coldfire-mlx-server on port {port}. Stop the server or "
+            f"pass --force to delete anyway.",
+            err=True,
+        )
+        raise SystemExit(1)
+
+    # Use HF's precomputed size_on_disk instead of walking the tree
+    # ourselves — same scan_cache_dir() call already used by cache_path_for.
+    size_bytes = _lookup_size_bytes(hf_id)
+    shutil.rmtree(path)
+    click.echo(f"✓ Removed {hf_id} (freed {_human_bytes(size_bytes)})")
