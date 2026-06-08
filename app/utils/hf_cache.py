@@ -28,23 +28,41 @@ from typing import Any
 from huggingface_hub import scan_cache_dir
 
 
+# Files in mlx_lm.models that ship utility code (no `class Model`) — exclude
+# from the discovered model_type set so we don't false-positive a repo whose
+# config.json happened to declare e.g. `"model_type": "cache"`. Verified
+# against the installed mlx_lm via `grep -L "class Model" mlx_lm/models/*.py`.
+_MLX_MODELS_NONMODEL_FILES: frozenset[str] = frozenset({
+    "activations", "bitlinear_layers", "cache", "gated_delta",
+    "mla", "pipeline", "rope_utils", "ssm", "switch_layers",
+})
+
+
 def _discover_mlx_model_types() -> frozenset[str]:
-    """Source of truth: every `*.py` file (excluding dunder/private) in
-    the installed `mlx_lm.models` package is a supported model_type.
+    """Discover candidate `model_type` strings by scanning the installed
+    `mlx_lm.models` package for `*.py` files. Excludes dunder/private
+    files, `base.py`, and known utility modules
+    (`_MLX_MODELS_NONMODEL_FILES`).
 
     This avoids hand-typing a list that drifts as upstream mlx_lm adds
     architectures (qwen3, gemma3, dbrx, etc.). On import failure (mlx_lm
     not installed, models dir missing) returns an empty set — the rest
     of the MLX heuristic (namespace + quantization key) still works as
     fallbacks.
+
+    Note: this is a filename-based heuristic. If mlx_lm later adds a
+    non-model utility file with a normal-looking name, update
+    `_MLX_MODELS_NONMODEL_FILES`. Verification:
+    `grep -L "class Model" mlx_lm/models/*.py`.
     """
     try:
         from mlx_lm import models as _mlx_models
-        from pathlib import Path as _Path
-        models_dir = _Path(_mlx_models.__file__).parent
+        models_dir = Path(_mlx_models.__file__).parent
         return frozenset(
             f.stem for f in models_dir.glob("*.py")
-            if not f.stem.startswith("_") and f.stem != "base"
+            if not f.stem.startswith("_")
+            and f.stem != "base"
+            and f.stem not in _MLX_MODELS_NONMODEL_FILES
         )
     except (ImportError, OSError, AttributeError):
         return frozenset()
@@ -153,7 +171,7 @@ def _read_config(repo: Any) -> dict[str, Any] | None:
         cfg_path = snap / "config.json"
         if cfg_path.is_file():
             try:
-                return json.loads(cfg_path.read_text())
-            except (json.JSONDecodeError, OSError):
+                return json.loads(cfg_path.read_text(encoding="utf-8"))
+            except (json.JSONDecodeError, OSError, UnicodeDecodeError):
                 return None
     return None
