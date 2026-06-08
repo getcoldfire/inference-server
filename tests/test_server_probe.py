@@ -1,4 +1,4 @@
-"""Unit tests for is_model_serving — best-effort loopback probe."""
+"""Unit tests for app.utils.server_probe (is_model_serving + serving_model_ids)."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 
 import pytest
 
-from app.utils.server_probe import is_model_serving
+from app.utils.server_probe import is_model_serving, serving_model_ids
 
 
 def _free_port() -> int:
@@ -79,8 +79,6 @@ def test_returns_false_on_malformed_json(mock_server):
 
 def test_serving_model_ids_batch(mock_server):
     """serving_model_ids fetches /v1/models once and returns the full set."""
-    from app.utils.server_probe import serving_model_ids
-
     port, handler = mock_server
     handler.response_body = json.dumps({"data": [{"id": "a:1"}, {"id": "b:2"}, {"id": "c:3"}]}).encode()
     handler.response_code = 200
@@ -89,6 +87,4 @@ def test_serving_model_ids_batch(mock_server):
 
 
 def test_serving_model_ids_returns_empty_on_no_server():
-    from app.utils.server_probe import serving_model_ids
-
     assert serving_model_ids(port=_free_port(), timeout=0.5) == set()
