@@ -1,9 +1,9 @@
 """Click subgroup `coldfire-mlx-server models` — local HuggingFace cache management.
 
-Subcommands (added in subsequent tasks):
+Subcommands:
   - models list   (Task 4)
   - models pull   (Task 5)
-  - models rm     (Task 6)
+  - models rm     (Task 6 — pending)
 
 Wired into the main `cli` group via `cli.add_command(models)` in app/cli.py.
 """
@@ -11,11 +11,14 @@ Wired into the main `cli` group via `cli.add_command(models)` in app/cli.py.
 from __future__ import annotations
 
 import json as _json
+import os
 from datetime import UTC, datetime
 
 import click
+from huggingface_hub import snapshot_download
+from huggingface_hub.errors import HfHubHTTPError, RepositoryNotFoundError
 
-from app.utils.hf_cache import list_cached_models
+from app.utils.hf_cache import MLX_SUPPORTED_MODEL_TYPES, cache_path_for, list_cached_models
 from app.utils.server_probe import serving_model_ids
 
 
@@ -130,3 +133,113 @@ def models_list(show_all: bool, as_json: bool, port: int) -> None:
         click.echo(f"{r.name:<52} {_human_bytes(r.size_bytes):>10}  {_relative_time(r.last_used):<14} {status}")
     click.echo()
     click.echo(f"Total: {total_str} across {len(annotated)} models in ~/.cache/huggingface/hub")
+
+
+_DEFAULT_PULL_PATTERNS: tuple[str, ...] = (
+    "*.safetensors",
+    "*.json",
+    "tokenizer*",
+    "*.txt",
+)
+
+
+def _looks_mlx_from_hub(hf_id: str) -> bool:
+    """Best-effort pre-download MLX-shape check via the Hub's config.json.
+
+    Used by `models pull` to decide whether to warn. Skipped when the
+    repo is already fully cached locally (we'd be doing a redundant
+    HEAD/etag round-trip; the cached `is_mlx_shaped` is just as good).
+
+    Falls back to True (skip warning) on any error so we don't block
+    legitimate downloads when the Hub is briefly unreachable.
+    """
+    if hf_id.startswith("mlx-community/"):
+        return True
+    try:
+        from huggingface_hub import hf_hub_download
+
+        cfg_path = hf_hub_download(repo_id=hf_id, filename="config.json")
+        with open(cfg_path) as fh:
+            cfg = _json.loads(fh.read())
+    except Exception:
+        return True  # be charitable on error — let download proceed
+    if "quantization" in cfg:
+        return True
+    return cfg.get("model_type", "") in MLX_SUPPORTED_MODEL_TYPES
+
+
+@models.command("pull")
+@click.argument("hf_id")
+@click.option(
+    "--quiet",
+    is_flag=True,
+    help="Suppress progress banners AND HF's own tqdm progress bars "
+    "(by setting HF_HUB_DISABLE_PROGRESS_BARS=1 for this command).",
+)
+@click.option(
+    "--include",
+    "include",
+    multiple=True,
+    help="Additional glob pattern to include in the download. Repeatable.",
+)
+@click.option(
+    "--exclude",
+    "exclude",
+    multiple=True,
+    help="Glob pattern to remove from the allowlist. Repeatable.",
+)
+def models_pull(hf_id: str, quiet: bool, include: tuple[str, ...], exclude: tuple[str, ...]) -> None:
+    """Download a model from HuggingFace into the local cache.
+
+    Doesn't register the model with any running fork — use
+    `coldfire-ctl models install` for that. This command is the
+    "pre-warm the cache, don't disturb the server" companion.
+
+    Default download allowlist: *.safetensors, *.json, tokenizer*, *.txt.
+    Add patterns with --include; remove with --exclude.
+    """
+    # --quiet also disables huggingface_hub's tqdm progress bars
+    # (not controllable via snapshot_download kwarg).
+    if quiet:
+        os.environ["HF_HUB_DISABLE_PROGRESS_BARS"] = "1"
+
+    # Skip the pre-flight MLX-shape check if the repo is already in
+    # the local cache — we'd otherwise be doing a redundant HF round-
+    # trip. Cached repos are already known to the operator; if they
+    # weren't MLX-shaped they would have seen the warning on first pull.
+    already_cached = cache_path_for(hf_id) is not None
+    if already_cached:
+        is_mlx = True  # don't warn redundantly
+    else:
+        is_mlx = _looks_mlx_from_hub(hf_id)
+
+    if not is_mlx:
+        click.echo(
+            f"⚠ {hf_id} doesn't look MLX-quantized — coldfire-mlx-server "
+            f"will fail to load it. Consider mlx-community/* alternatives.",
+            err=True,
+        )
+
+    patterns = list(_DEFAULT_PULL_PATTERNS) + list(include)
+    patterns = [p for p in patterns if p not in set(exclude)]
+
+    if not quiet:
+        click.echo(f"Downloading {hf_id} ...")
+
+    try:
+        path = snapshot_download(repo_id=hf_id, allow_patterns=patterns)
+    except (RepositoryNotFoundError, HfHubHTTPError) as e:
+        click.echo(f"error: {e}", err=True)
+        raise SystemExit(1) from e
+    except OSError as e:
+        # No space left on device etc.
+        click.echo(f"error: {e}", err=True)
+        raise SystemExit(2) from e
+
+    if not quiet:
+        click.echo(f"✓ {hf_id} cached at {path}")
+    if not is_mlx:
+        click.echo(
+            "⚠ Reminder: this repo is not MLX-quantized; `models install` of this id will fail.",
+            err=True,
+        )
