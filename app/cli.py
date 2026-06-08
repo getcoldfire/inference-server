@@ -548,6 +548,6 @@ def launch(
 # BEFORE the entrypoint function runs. The import + add_command lives at
 # the bottom of the file so every `@cli.command()` above is fully
 # attached before the subgroup is wired in.
-from app.cli_models import models as _models_group  # noqa: E402
+from .cli_models import models as _models_group  # noqa: E402
 
 cli.add_command(_models_group)
