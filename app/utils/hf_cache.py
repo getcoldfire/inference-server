@@ -21,21 +21,29 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 from huggingface_hub import scan_cache_dir
 
-
 # Files in mlx_lm.models that ship utility code (no `class Model`) — exclude
 # from the discovered model_type set so we don't false-positive a repo whose
 # config.json happened to declare e.g. `"model_type": "cache"`. Verified
 # against the installed mlx_lm via `grep -L "class Model" mlx_lm/models/*.py`.
-_MLX_MODELS_NONMODEL_FILES: frozenset[str] = frozenset({
-    "activations", "bitlinear_layers", "cache", "gated_delta",
-    "mla", "pipeline", "rope_utils", "ssm", "switch_layers",
-})
+_MLX_MODELS_NONMODEL_FILES: frozenset[str] = frozenset(
+    {
+        "activations",
+        "bitlinear_layers",
+        "cache",
+        "gated_delta",
+        "mla",
+        "pipeline",
+        "rope_utils",
+        "ssm",
+        "switch_layers",
+    }
+)
 
 
 def _discover_mlx_model_types() -> frozenset[str]:
@@ -57,12 +65,12 @@ def _discover_mlx_model_types() -> frozenset[str]:
     """
     try:
         from mlx_lm import models as _mlx_models
+
         models_dir = Path(_mlx_models.__file__).parent
         return frozenset(
-            f.stem for f in models_dir.glob("*.py")
-            if not f.stem.startswith("_")
-            and f.stem != "base"
-            and f.stem not in _MLX_MODELS_NONMODEL_FILES
+            f.stem
+            for f in models_dir.glob("*.py")
+            if not f.stem.startswith("_") and f.stem != "base" and f.stem not in _MLX_MODELS_NONMODEL_FILES
         )
     except (ImportError, OSError, AttributeError):
         return frozenset()
@@ -75,12 +83,12 @@ MLX_SUPPORTED_MODEL_TYPES: frozenset[str] = _discover_mlx_model_types()
 class CachedModel:
     """A model present in the local HF cache."""
 
-    name: str                       # HF repo ID e.g. "mlx-community/Foo-4bit"
-    size_bytes: int                 # Total bytes on disk (HF's size_on_disk)
-    last_used: datetime | None      # huggingface_hub's last_accessed (lib-internal,
-                                    # NOT filesystem atime). None if not tracked yet.
-    is_mlx: bool                    # Passes the MLX heuristic
-    path: Path                      # Cache directory path
+    name: str  # HF repo ID e.g. "mlx-community/Foo-4bit"
+    size_bytes: int  # Total bytes on disk (HF's size_on_disk)
+    last_used: datetime | None  # huggingface_hub's last_accessed (lib-internal,
+    # NOT filesystem atime). None if not tracked yet.
+    is_mlx: bool  # Passes the MLX heuristic
+    path: Path  # Cache directory path
 
 
 def list_cached_models(mlx_only: bool = True) -> list[CachedModel]:
@@ -99,14 +107,16 @@ def list_cached_models(mlx_only: bool = True) -> list[CachedModel]:
             continue
         last_used: datetime | None = None
         if repo.last_accessed is not None:
-            last_used = datetime.fromtimestamp(repo.last_accessed, tz=timezone.utc)
-        out.append(CachedModel(
-            name=repo.repo_id,
-            size_bytes=int(repo.size_on_disk),
-            last_used=last_used,
-            is_mlx=is_mlx,
-            path=Path(repo.repo_path),
-        ))
+            last_used = datetime.fromtimestamp(repo.last_accessed, tz=UTC)
+        out.append(
+            CachedModel(
+                name=repo.repo_id,
+                size_bytes=int(repo.size_on_disk),
+                last_used=last_used,
+                is_mlx=is_mlx,
+                path=Path(repo.repo_path),
+            )
+        )
     return out
 
 
