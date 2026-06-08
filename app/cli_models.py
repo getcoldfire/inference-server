@@ -39,13 +39,18 @@ def _human_bytes(n: int) -> str:
     if n < 1000:
         return f"{n} B"
     f = float(n)
+    # PB-scale caches are out of scope for v0.2.0 — the TB branch catches
+    # any size beyond 1000 GB and stays in TB units.
     for unit in ("KB", "MB", "GB", "TB"):
         f /= 1000.0
         if f < 1000 or unit == "TB":
             if f == int(f):
                 return f"{int(f)} {unit}"
             return f"{f:.1f} {unit}"
-    return f"{f:.1f} TB"
+    # Unreachable: the TB branch above always exits the loop. Belt-and-
+    # suspenders only — Python type-checkers are happier with an
+    # explicit terminal return.
+    return f"{f:.1f} TB"  # pragma: no cover
 
 
 def _relative_time(when: datetime | None) -> str:
