@@ -539,3 +539,15 @@ def launch(
     # the continuous batcher runs on a thread other than the one that
     # loaded the model. See https://github.com/ml-explore/mlx/issues/2457.
     asyncio.run(start_multi(args.to_multi_model_server_config()))
+
+
+# Register the `models` subgroup on the top-level `cli` group.
+#
+# This MUST run at module-import time, NOT inside the `cli()` function
+# body: Click resolves subcommands during argument parsing, which happens
+# BEFORE the entrypoint function runs. The import + add_command lives at
+# the bottom of the file so every `@cli.command()` above is fully
+# attached before the subgroup is wired in.
+from .cli_models import models as _models_group  # noqa: E402
+
+cli.add_command(_models_group)
