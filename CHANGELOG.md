@@ -1,5 +1,23 @@
 # Changelog
 
+## v0.2.2 — 2026-06-10
+
+### Bug fixes
+
+- **`/healthz` always returns 200 when the server process is alive**
+  (`app/api/endpoints.py`): The previous implementation returned HTTP 503
+  when no models were loaded (`model_status: "no_models"`), conflating
+  "server is broken" with "server has not loaded any models yet". After
+  v0.2.1 made zero-models a first-class lifecycle (start empty, hot-add via
+  `POST /admin/models/load`), this caused the cli-v2 backendlauncher to
+  never mark the backend ready — it polls `/healthz` expecting 200 to gate
+  IPC socket creation, which never arrived. Now `/healthz` returns 200
+  whenever the server process is alive and responsive. The JSON body's
+  `model_status` field still distinguishes lifecycle states (`"no_models"`,
+  `"uninitialized"`, `"initialized"`, `"initialized (N model(s))"`) for
+  callers that need fine-grained readiness info. The same fix applies to the
+  `/health` legacy alias (both routes share one handler).
+
 ## v0.2.1 — 2026-06-10
 
 ### Bug fixes

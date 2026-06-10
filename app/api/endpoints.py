@@ -321,10 +321,19 @@ def _should_preserve_legacy_responses_model(
 @router.get("/health", response_model=None)
 @router.get("/healthz", response_model=None)
 async def health(raw_request: Request) -> HealthCheckResponse | JSONResponse:
-    """Health check endpoint - verifies handler initialization status.
+    """Health check endpoint - returns 200 whenever the server process is alive.
 
-    Returns 503 if handler is not initialized, 200 otherwise.
-    In multi-handler mode reports the number of loaded models.
+    HTTP 200 means "server is up and accepting requests". The JSON body's
+    ``model_status`` field conveys fine-grained lifecycle state so callers
+    that need readiness detail (e.g. waiting for a hot-add to complete) can
+    introspect without conflating "no models loaded yet" with "server is
+    broken".
+
+    ``model_status`` values:
+    - ``"no_models"``         — server alive, registry present, zero models loaded
+    - ``"initialized (N model(s))"`` — registry mode, N models loaded
+    - ``"initialized"``       — single-handler mode, model ready
+    - ``"uninitialized"``     — legacy single-handler mode, handler not yet set
 
     Exposed at both ``/health`` (legacy) and ``/healthz`` (Kubernetes / cli-v2
     convention). Both routes share this single handler and return identical
@@ -334,9 +343,11 @@ async def health(raw_request: Request) -> HealthCheckResponse | JSONResponse:
     if registry is not None:
         model_count = registry.get_model_count()
         if model_count == 0:
+            # Server is alive; zero models is a valid lifecycle state (empty
+            # boot before hot-add via /admin/models/load).
             return JSONResponse(
-                status_code=HTTPStatus.SERVICE_UNAVAILABLE,
-                content={"status": "unhealthy", "model_id": None, "model_status": "no_models"},
+                status_code=HTTPStatus.OK,
+                content={"status": "ok", "model_id": None, "model_status": "no_models"},
             )
         model_ids = [m["id"] for m in registry.list_models()]
         return HealthCheckResponse(
@@ -348,10 +359,12 @@ async def health(raw_request: Request) -> HealthCheckResponse | JSONResponse:
     handler = getattr(raw_request.app.state, "handler", None)
 
     if handler is None:
-        # Handler not initialized - return 503 with degraded status
+        # Single-handler mode: handler not yet set. Server is alive but the
+        # model has not finished loading. Still return 200 — the process is
+        # responsive; callers can check model_status for load progress.
         return JSONResponse(
-            status_code=HTTPStatus.SERVICE_UNAVAILABLE,
-            content={"status": "unhealthy", "model_id": None, "model_status": "uninitialized"},
+            status_code=HTTPStatus.OK,
+            content={"status": "ok", "model_id": None, "model_status": "uninitialized"},
         )
 
     # Handler initialized - extract model_id

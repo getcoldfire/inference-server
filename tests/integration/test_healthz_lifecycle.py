@@ -1,15 +1,21 @@
-"""``/healthz`` lifecycle: 503 during model load, 200 after.
+"""``/healthz`` lifecycle: 200 throughout boot and after model load.
 
 This test focuses on the **readiness transition** — boot a server, observe
-that ``/healthz`` returns 503 while the model is still loading, and that it
-eventually transitions to 200 once the model is ready. The plan separates
-this from Phase 5's ``tests/test_lifecycle.py::test_sigterm_exits_within_5s``
-which tests the SIGTERM-to-exit-code-0 contract; we do not re-test that here.
+that ``/healthz`` returns 200 while the model is still loading (server alive,
+``model_status`` reflects load state), and that it eventually settles to 200
+with ``model_status`` indicating a loaded model. The plan separates this from
+Phase 5's ``tests/test_lifecycle.py::test_sigterm_exits_within_5s`` which
+tests the SIGTERM-to-exit-code-0 contract; we do not re-test that here.
 
 We boot the server with the tiny_bert embeddings fixture so the load time
 is short and deterministic, but the test tolerates the (unlikely) case where
 the model loads before the first probe lands by accepting 200 immediately
 and merely asserting the readiness transition completes.
+
+Note: /healthz no longer returns 503 for any lifecycle state — HTTP 200 is
+the contract whenever the server process is alive and responsive. The JSON
+body's ``model_status`` field distinguishes load states for callers that need
+fine-grained readiness info.
 """
 
 from __future__ import annotations
@@ -33,8 +39,14 @@ _BERT_FIXTURE = _REPO_ROOT / "tests" / "fixtures" / "tiny_bert"
 @requires_apple_silicon
 @pytest.mark.smoke
 @pytest.mark.integration
-def test_healthz_503_during_load_then_200_when_ready() -> None:
-    """``/healthz`` must transition from 503 (loading) to 200 (ready)."""
+def test_healthz_200_during_load_and_when_ready() -> None:
+    """``/healthz`` must return 200 throughout boot and after model load.
+
+    The endpoint returns 200 whenever the server process is alive. During model
+    load the JSON body's ``model_status`` will be ``"uninitialized"``; once
+    loading completes it transitions to ``"initialized"`` (or similar). This
+    test confirms the endpoint is reachable and settles to a ready state.
+    """
     assert _BERT_FIXTURE.exists(), f"Missing test fixture: {_BERT_FIXTURE}"
 
     port = _free_port()
@@ -64,8 +76,8 @@ def test_healthz_503_during_load_then_200_when_ready() -> None:
 
     try:
         # Poll quickly so the first probe lands before model load completes.
-        # Acceptable terminal states: 503 (loading), 200 (ready), or
-        # connection-refused (uvicorn not bound yet).
+        # Only acceptable HTTP status is 200 (or connection-refused before
+        # uvicorn binds). 503 is no longer part of the contract.
         observed_states: list[str] = []
         deadline = time.monotonic() + 60.0
         saw_ready = False
@@ -75,24 +87,22 @@ def test_healthz_503_during_load_then_200_when_ready() -> None:
                 pytest.fail(f"server exited unexpectedly during load: {out!r}")
             try:
                 r = httpx.get(f"http://127.0.0.1:{port}/healthz", timeout=1.0)
-                observed_states.append(str(r.status_code))
-                if r.status_code == 200:
+                observed_states.append(f"{r.status_code}:{r.json().get('model_status','?')}")
+                assert r.status_code == 200, (
+                    f"/healthz returned unexpected status {r.status_code} during load: {r.text}"
+                )
+                body = r.json()
+                model_status = body.get("model_status", "")
+                # "initialized" (with optional count suffix) signals model is ready.
+                if model_status.startswith("initialized"):
                     saw_ready = True
                     break
-                if r.status_code == 503:
-                    # Loading — keep polling
-                    pass
-                else:
-                    pytest.fail(f"unexpected healthz status {r.status_code} during load: {r.text}")
             except (httpx.HTTPError, OSError):
                 observed_states.append("conn_refused")
             time.sleep(0.05)
 
-        assert saw_ready, f"healthz never returned 200 within 60s; observed: {observed_states[-20:]!r}"
-        # Sanity: at least *some* state was observed before ready (proves the
-        # readiness probe sequence happened — we can't strictly require a 503
-        # observation because a fast-loading model may flip to 200 before our
-        # first probe lands).
+        assert saw_ready, f"healthz never reached initialized status within 60s; observed: {observed_states[-20:]!r}"
+        # Sanity: at least *some* state was observed before ready.
         assert observed_states, "no /healthz probes recorded"
     finally:
         if proc.poll() is None:

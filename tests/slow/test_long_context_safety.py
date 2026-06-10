@@ -2,9 +2,11 @@
 
 Guards against upstream mlx-lm issue #883 — a kernel panic observed at
 ~58k context length on M3 Ultra. The assertion is "the test process and
-server subprocess survive" (HTTP 200 or 503 are both acceptable; OOM with a
-clean error is fine; what we won't tolerate is silent process death or a
-macOS kernel panic).
+server subprocess survive" (HTTP 200 or 503 from the *chat* endpoint are
+both acceptable — 503 means the request was rejected as too large; OOM with
+a clean error is fine; what we won't tolerate is silent process death or a
+macOS kernel panic). Note: this tests /v1/chat/completions, not /healthz;
+the healthz contract (always 200 when alive) is unrelated.
 
 Why we use ~16k instead of 50k tokens:
 
@@ -38,7 +40,7 @@ from tests.integration.conftest import CHAT_MODEL_ID, requires_apple_silicon
 def test_long_context_does_not_kernel_panic(
     chat_server: tuple[str, int],
 ) -> None:
-    """Long context returns 200 or 503 (clean) — never process death."""
+    """Long-context chat request returns 200 or 503 (clean) — never process death."""
     base_url, server_pid = chat_server
     proc = psutil.Process(server_pid)
 
@@ -66,8 +68,8 @@ def test_long_context_does_not_kernel_panic(
         pytest.fail(f"transport error during long-context request (server alive? {proc.is_running()}): {e}")
 
     # The strict requirement: server is still alive. 200 (handled) or 503
-    # (rejected as too large) are both acceptable outcomes; what's not
-    # acceptable is the server subprocess dying.
+    # (rejected as too large by the chat endpoint) are both acceptable
+    # outcomes; what's not acceptable is the server subprocess dying.
     assert proc.is_running(), f"server subprocess died handling long-context request (HTTP status={r.status_code})"
     assert r.status_code in (200, 503), (
         f"unexpected status code from long-context request: {r.status_code} {r.text[:300]}"

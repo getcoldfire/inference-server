@@ -1,15 +1,22 @@
 """Tests for the /healthz alias.
 
-The cli-v2 lifecycle contract requires a `GET /healthz` endpoint that:
-- Returns 503 while the handler is still loading the model.
-- Returns 200 once the handler is initialized.
+The cli-v2 lifecycle contract requires a ``GET /healthz`` endpoint that
+always returns HTTP 200 when the server process is alive and responsive.
+Zero-models is a valid lifecycle state (empty boot before hot-add via
+``/admin/models/load``); the server is still healthy in that state.
 
-Upstream already exposes `GET /health` with this behavior (driven by
-`app.state.handler` / `app.state.registry`). `/healthz` must be a strict
-alias — same payload, same status semantics.
+The JSON body's ``model_status`` field conveys fine-grained readiness info
+for callers that need it:
+  - ``"no_models"``       — registry present, nothing loaded yet
+  - ``"uninitialized"``   — single-handler mode, model not yet loaded
+  - ``"initialized"``     — single-handler mode, model ready
+  - ``"initialized (N model(s))"`` — registry mode, N models loaded
+
+Upstream already exposes ``GET /health`` with the same behavior. ``/healthz``
+must be a strict alias — same payload, same status semantics.
 
 These tests construct a minimal FastAPI app and mount the production router,
-then poke `app.state` directly to simulate load progression. This avoids
+then poke ``app.state`` directly to simulate load progression. This avoids
 booting a real MLX handler subprocess in unit tests.
 """
 
@@ -33,13 +40,51 @@ def _make_app() -> FastAPI:
     return app
 
 
-def test_healthz_returns_503_before_model_load():
+# ---------------------------------------------------------------------------
+# Zero-models / not-yet-loaded: server must still report 200
+# ---------------------------------------------------------------------------
+
+
+def test_healthz_returns_200_with_zero_models():
+    """Server is alive with no models loaded — HTTP layer must say so.
+
+    Zero-models is the natural state immediately after boot when the operator
+    intends to hot-add models via /admin/models/load. The backendlauncher in
+    cli-v2 polls /healthz expecting 200 to gate IPC socket creation; returning
+    503 here would permanently block that flow.
+    """
+    app = _make_app()
+
+    class _FakeRegistry:
+        def get_model_count(self) -> int:
+            return 0
+
+        def list_models(self) -> list:
+            return []
+
+    app.state.registry = _FakeRegistry()
+    client = TestClient(app, raise_server_exceptions=False)
+    resp = client.get("/healthz")
+    assert resp.status_code == 200, f"want 200, got {resp.status_code}: {resp.text}"
+    body = resp.json()
+    assert body.get("model_status") == "no_models", body
+    assert body.get("status") == "ok", body
+
+
+def test_healthz_returns_200_before_model_load():
+    """Single-handler mode: handler not yet set → still 200."""
     app = _make_app()
     client = TestClient(app, raise_server_exceptions=False)
     r = client.get("/healthz")
-    assert r.status_code == HTTPStatus.SERVICE_UNAVAILABLE
+    assert r.status_code == HTTPStatus.OK
     body = r.json()
-    assert body["status"] == "unhealthy"
+    assert body["status"] == "ok"
+    assert body["model_status"] == "uninitialized"
+
+
+# ---------------------------------------------------------------------------
+# Model loaded: 200 with populated model_id
+# ---------------------------------------------------------------------------
 
 
 def test_healthz_returns_200_after_model_load():
@@ -56,6 +101,11 @@ def test_healthz_returns_200_after_model_load():
     body = r.json()
     assert body["status"] == "ok"
     assert body["model_id"] == "mlx-community/Llama-3.2-3B-Instruct-4bit"
+
+
+# ---------------------------------------------------------------------------
+# /health alias parity
+# ---------------------------------------------------------------------------
 
 
 def test_health_alias_still_works():
@@ -76,12 +126,21 @@ def test_health_alias_still_works():
     assert r_health.json() == r_healthz.json()
 
 
-def test_healthz_503_matches_health_503_body():
-    """When unhealthy, /healthz body must mirror /health body exactly."""
+def test_health_and_healthz_match_with_zero_models():
+    """/health and /healthz must return identical payloads when no models are loaded."""
     app = _make_app()
+
+    class _FakeRegistry:
+        def get_model_count(self) -> int:
+            return 0
+
+        def list_models(self) -> list:
+            return []
+
+    app.state.registry = _FakeRegistry()
     client = TestClient(app, raise_server_exceptions=False)
     r_health = client.get("/health")
     r_healthz = client.get("/healthz")
-    assert r_health.status_code == HTTPStatus.SERVICE_UNAVAILABLE
-    assert r_healthz.status_code == HTTPStatus.SERVICE_UNAVAILABLE
+    assert r_health.status_code == HTTPStatus.OK
+    assert r_healthz.status_code == HTTPStatus.OK
     assert r_health.json() == r_healthz.json()
