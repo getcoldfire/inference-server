@@ -52,7 +52,6 @@ def test_healthz_503_during_load_then_200_when_ready() -> None:
             str(_BERT_FIXTURE),
             "--model-type",
             "embeddings",
-            "--no-log-file",
             "--log-level",
             "WARNING",
         ],

@@ -347,10 +347,10 @@ def load_config_from_yaml(config_path: str) -> MultiModelServerConfig:
         msg = "'server' section must be a mapping"
         raise ValueError(msg)
 
-    # ---- models section (required, at least one entry) ----
+    # ---- models section (optional; empty list is valid for hot-add workflows) ----
     models_raw: list = raw.get("models", [])
-    if not isinstance(models_raw, list) or len(models_raw) == 0:
-        msg = "'models' section must be a non-empty list of model entries"
+    if not isinstance(models_raw, list):
+        msg = "'models' section must be a list of model entries"
         raise ValueError(msg)
 
     model_entries: list[ModelEntryConfig] = []

@@ -232,17 +232,6 @@ def cli():
     ),
 )
 @click.option(
-    "--log-file",
-    default=None,
-    type=str,
-    help="Path to log file. If not specified, logs will be written to 'logs/app.log' by default.",
-)
-@click.option(
-    "--no-log-file",
-    is_flag=True,
-    help="Disable file logging entirely. Only console output will be shown.",
-)
-@click.option(
     "--log-level",
     default="INFO",
     type=UpperChoice(list(_LOG_LEVEL_CHOICES)),
@@ -427,8 +416,6 @@ def launch(
     queue_timeout,
     queue_size,
     idle_unload_seconds,
-    log_file,
-    no_log_file,
     log_level,
     enable_auto_tool_choice,
     tool_call_parser,
@@ -498,8 +485,6 @@ def launch(
         # cli-v2 --idle-unload-seconds: > 0 flips on-demand load/unload.
         on_demand=idle_unload_seconds > 0,
         on_demand_idle_timeout=idle_unload_seconds or 60,
-        log_file=log_file,
-        no_log_file=no_log_file,
         log_level=_resolve_log_level(log_level),
         enable_auto_tool_choice=enable_auto_tool_choice,
         tool_call_parser=tool_call_parser,

@@ -135,7 +135,6 @@ def test_sigterm_exits_within_5s() -> None:
             str(_BERT_FIXTURE),
             "--model-type",
             "embeddings",
-            "--no-log-file",
             "--log-level",
             "WARNING",
         ],

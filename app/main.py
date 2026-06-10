@@ -118,12 +118,7 @@ def print_startup_banner(config_args: MLXServerConfig) -> None:
                 f"prefill_step={config_args.batch_prefill_step_size}"
             )
     logger.info(f"📝 Log Level: {config_args.log_level}")
-    if config_args.no_log_file:
-        logger.info("📝 File Logging: Disabled")
-    elif config_args.log_file:
-        logger.info(f"📝 Log File: {config_args.log_file}")
-    else:
-        logger.info("📝 Log File: logs/app.log (default)")
+    logger.info("📝 Log Output: stderr (file logging disabled)")
     logger.info("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
 
 

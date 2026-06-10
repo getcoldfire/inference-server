@@ -73,26 +73,29 @@ def _attach_sampling_defaults(handler: Any, config: Any) -> Any:
 def configure_logging(log_file: str | None = None, no_log_file: bool = False, log_level: str = "INFO") -> None:
     """Set up loguru handlers used by the server.
 
-    This helper replaces the default loguru handler with a console
-    handler using a compact, colored format. When ``no_log_file`` is
-    False a rotating file handler is also added using ``log_file`` or
-    a default path.
+    Replaces the default loguru handler with a single stderr/stdout
+    handler using a compact, colored format.  File logging has been
+    removed: a relative ``logs/`` path resolves to ``/logs/`` when the
+    process is launched under macOS launchd (cwd is ``/``), which is a
+    read-only filesystem.  The parent daemon captures this process's
+    stderr and routes it through its own structured logger, so no
+    separate file is needed (12-factor: treat logs as streams).
+
+    The ``log_file`` and ``no_log_file`` parameters are accepted for
+    backwards compatibility but are ignored.
 
     Parameters
     ----------
     log_file:
-        Optional filesystem path where logs should be written. When
-        ``None`` and file logging is enabled a sensible default
-        (``logs/app.log``) is used.
+        Accepted but ignored.  Kept for call-site compatibility.
     no_log_file:
-        When True, file logging is disabled and only console logs are
-        emitted.
+        Accepted but ignored.  Kept for call-site compatibility.
     log_level:
         Minimum log level to emit (e.g. "DEBUG", "INFO").
     """
     logger.remove()  # Remove default handler
 
-    # Add console handler
+    # Stderr-only handler: parent daemon captures this via subprocess pipe.
     logger.add(
         print,
         level=log_level,
@@ -102,15 +105,6 @@ def configure_logging(log_file: str | None = None, no_log_file: bool = False, lo
         "✦ <level>{message}</level>",
         colorize=True,
     )
-    if not no_log_file:
-        file_path = log_file or "logs/app.log"
-        logger.add(
-            file_path,
-            rotation="500 MB",
-            retention="10 days",
-            level=log_level,
-            format="{time:YYYY-MM-DD HH:mm:ss} | {level} | {message}",
-        )
 
 
 def create_lifespan(config_args: MLXServerConfig):

@@ -57,7 +57,6 @@ def tiny_bert_server() -> Iterator[str]:
             str(_BERT_FIXTURE),
             "--model-type",
             "embeddings",
-            "--no-log-file",
             "--log-level",
             "WARNING",
         ],

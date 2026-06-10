@@ -104,7 +104,6 @@ def _boot_server(model_id: str, model_type: str = "lm") -> tuple[subprocess.Pope
         model_id,
         "--model-type",
         model_type,
-        "--no-log-file",
         "--log-level",
         "WARNING",
     ]
