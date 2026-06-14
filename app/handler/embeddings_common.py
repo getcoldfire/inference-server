@@ -6,6 +6,7 @@ path (app/handler/llama_cpp/) call this module so matryoshka truncation
 behaves identically across runtimes. Drift between the two is a silent
 correctness bug for cross-handler vector compatibility.
 """
+
 from __future__ import annotations
 
 import numpy as np
@@ -30,9 +31,7 @@ def apply_dimensions(vec: np.ndarray, target_dim: int) -> np.ndarray:
         raise ValueError(f"dimensions must be positive integer; got {target_dim}")
     native_dim = vec.shape[-1]
     if target_dim > native_dim:
-        raise ValueError(
-            f"dimensions {target_dim} exceeds model embedding size {native_dim}"
-        )
+        raise ValueError(f"dimensions {target_dim} exceeds model embedding size {native_dim}")
     truncated = vec[..., :target_dim]
     norms = np.linalg.norm(truncated, axis=-1, keepdims=True)
     # Replace zero norms with 1 to avoid division by zero; the zero rows stay zero.

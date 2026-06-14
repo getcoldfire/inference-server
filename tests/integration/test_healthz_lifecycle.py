@@ -87,7 +87,7 @@ def test_healthz_200_during_load_and_when_ready() -> None:
                 pytest.fail(f"server exited unexpectedly during load: {out!r}")
             try:
                 r = httpx.get(f"http://127.0.0.1:{port}/healthz", timeout=1.0)
-                observed_states.append(f"{r.status_code}:{r.json().get('model_status','?')}")
+                observed_states.append(f"{r.status_code}:{r.json().get('model_status', '?')}")
                 assert r.status_code == 200, (
                     f"/healthz returned unexpected status {r.status_code} during load: {r.text}"
                 )

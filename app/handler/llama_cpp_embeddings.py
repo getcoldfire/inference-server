@@ -47,6 +47,7 @@ class LlamaCppEmbeddingsHandler:
     """
 
     handler_type: str = "embeddings"
+    _cleaned: bool
 
     def __init__(
         self,
@@ -131,13 +132,9 @@ class LlamaCppEmbeddingsHandler:
             timeout=config.get("timeout", 300),
         )
         self.inference_worker.start()
-        logger.info(
-            "Initialized LlamaCppEmbeddingsHandler and started inference worker"
-        )
+        logger.info("Initialized LlamaCppEmbeddingsHandler and started inference worker")
 
-    async def generate_embeddings_response(
-        self, request: EmbeddingRequest
-    ) -> dict[str, Any]:
+    async def generate_embeddings_response(self, request: EmbeddingRequest) -> dict[str, Any]:
         """Embed ``request.input`` and return ``{"embeddings": [...], "usage": {...}}``.
 
         llama-cpp-python does not expose per-request token counts, so ``usage``

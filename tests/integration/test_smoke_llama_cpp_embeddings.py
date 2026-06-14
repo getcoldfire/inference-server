@@ -11,6 +11,7 @@ a warm-up call inside LlamaCppEmbeddingsLoader.ensure_loaded() that calls
 llama.create_embedding(input="warm") once on the loader thread before
 returning. See plan Phase 5 Step 4.
 """
+
 from __future__ import annotations
 
 import math
@@ -19,19 +20,17 @@ import platform
 import subprocess
 import sys
 from collections.abc import Iterator
-from pathlib import Path
 
 import httpx
 import pytest
 
 from tests.integration.conftest import (
     REPO_ROOT,
-    requires_apple_silicon,
     _free_port,
-    _wait_for_healthz,
     _teardown_server,
+    _wait_for_healthz,
+    requires_apple_silicon,
 )
-
 
 PILOT_MODEL_ID = "nomic-ai/nomic-embed-text-v1.5-GGUF"
 PILOT_HF_FILE = "nomic-embed-text-v1.5.f16.gguf"

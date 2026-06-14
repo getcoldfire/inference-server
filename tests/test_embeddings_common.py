@@ -6,9 +6,11 @@ embedding handler apply matryoshka truncation + L2 renormalization identically.
 A regression here is a silent-correctness bug — both handlers' wire output
 drift apart.
 """
+
 import math
-import pytest
+
 import numpy as np
+import pytest
 
 from app.handler.embeddings_common import apply_dimensions
 
@@ -75,10 +77,13 @@ def test_matches_pre_refactor_bert_output_on_fixed_input():
 
 def test_accepts_2d_batch_input():
     """2-D input of shape (batch, dim) is truncated + renormalized per row."""
-    batch = np.array([
-        [1.0, 1.0, 1.0, 1.0],
-        [2.0, 0.0, 2.0, 0.0],
-    ], dtype=np.float32)
+    batch = np.array(
+        [
+            [1.0, 1.0, 1.0, 1.0],
+            [2.0, 0.0, 2.0, 0.0],
+        ],
+        dtype=np.float32,
+    )
     out = apply_dimensions(batch, 2)
     assert out.shape == (2, 2)
     for row in out:
@@ -88,10 +93,13 @@ def test_accepts_2d_batch_input():
 
 def test_2d_zero_row_returns_zeros_in_place():
     """A 2-D batch where one row is all-zero: that row returns zeros; others normalize."""
-    batch = np.array([
-        [0.0, 0.0, 0.0, 0.0],
-        [3.0, 4.0, 0.0, 0.0],
-    ], dtype=np.float32)
+    batch = np.array(
+        [
+            [0.0, 0.0, 0.0, 0.0],
+            [3.0, 4.0, 0.0, 0.0],
+        ],
+        dtype=np.float32,
+    )
     out = apply_dimensions(batch, 2)
     assert list(out[0]) == [0.0, 0.0]
     n = math.sqrt(sum(x * x for x in out[1]))

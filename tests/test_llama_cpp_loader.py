@@ -4,13 +4,15 @@ Llama() is mocked — these tests assert the loader's CONFIG-vs-CONSTRUCTION
 contract (lazy on construction; local-vs-HF dispatch; required-field
 validation). Real model loading is covered by smoke tests on Apple Silicon.
 """
+
 from __future__ import annotations
 
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
 from app.handler.llama_cpp.loader import LlamaCppConfig, LlamaCppEmbeddingsLoader
+from app.handler.llama_cpp.service import LlamaCppEmbeddingsService
 
 
 def test_construction_is_lazy_no_llama_called():
@@ -100,8 +102,6 @@ def test_ensure_loaded_is_idempotent():
 # ---------------------------------------------------------------------------
 # Service-layer tests
 # ---------------------------------------------------------------------------
-
-from app.handler.llama_cpp.service import LlamaCppEmbeddingsService
 
 
 def test_service_calls_loader_then_truncates():

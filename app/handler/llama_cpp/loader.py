@@ -4,13 +4,13 @@ Construction is cheap (config only); the underlying Llama() instance is
 built on first embed() call so admin-POST registration stays fast.
 Mirrors the on-demand contract of the MLX-LM handler.
 """
+
 from __future__ import annotations
 
 import logging
 import os
 import threading
 from dataclasses import dataclass
-from typing import Optional
 
 from llama_cpp import Llama
 
@@ -24,12 +24,13 @@ class LlamaCppConfig:
     All fields except model_path are optional; llama-cpp-python applies
     its own defaults for omitted values.
     """
-    model_path: str            # HF repo id ("org/repo") OR absolute local path ending in .gguf
-    hf_file: Optional[str]     # required if model_path is an HF repo; ignored for local paths
-    n_gpu_layers: int = -1     # -1 = all to Metal (default on Apple Silicon)
-    n_ctx: Optional[int] = None
-    n_batch: Optional[int] = None
-    n_threads: Optional[int] = None
+
+    model_path: str  # HF repo id ("org/repo") OR absolute local path ending in .gguf
+    hf_file: str | None  # required if model_path is an HF repo; ignored for local paths
+    n_gpu_layers: int = -1  # -1 = all to Metal (default on Apple Silicon)
+    n_ctx: int | None = None
+    n_batch: int | None = None
+    n_threads: int | None = None
 
 
 class LlamaCppEmbeddingsLoader:
@@ -42,7 +43,7 @@ class LlamaCppEmbeddingsLoader:
     def __init__(self, cfg: LlamaCppConfig):
         self.cfg = cfg
         self._lock = threading.Lock()
-        self.llama: Optional[Llama] = None
+        self.llama: Llama | None = None
 
     @staticmethod
     def _is_local_path(model_path: str) -> bool:
@@ -68,19 +69,17 @@ class LlamaCppEmbeddingsLoader:
             if self._is_local_path(self.cfg.model_path):
                 log.info("llama_cpp: loading local file: %s", self.cfg.model_path)
                 if not os.path.exists(self.cfg.model_path):
-                    raise FileNotFoundError(
-                        f"llama-cpp model_path is local but does not exist: {self.cfg.model_path}"
-                    )
+                    raise FileNotFoundError(f"llama-cpp model_path is local but does not exist: {self.cfg.model_path}")
                 self.llama = Llama(model_path=self.cfg.model_path, **kwargs)
             else:
                 if not self.cfg.hf_file:
                     raise ValueError(
-                        f"llama-cpp: hf_file is required for HF repo "
-                        f"{self.cfg.model_path!r} (no local path detected)"
+                        f"llama-cpp: hf_file is required for HF repo {self.cfg.model_path!r} (no local path detected)"
                     )
                 log.info(
                     "llama_cpp: fetching from HF: %s/%s",
-                    self.cfg.model_path, self.cfg.hf_file,
+                    self.cfg.model_path,
+                    self.cfg.hf_file,
                 )
                 self.llama = Llama.from_pretrained(
                     repo_id=self.cfg.model_path,

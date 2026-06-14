@@ -1,6 +1,7 @@
 """Both BERT and llama-cpp embedding handlers must honor `dimensions`
 identically — they share the same apply_dimensions helper.
 """
+
 from __future__ import annotations
 
 import math
@@ -9,19 +10,17 @@ import platform
 import subprocess
 import sys
 from collections.abc import Iterator
-from pathlib import Path
 
 import httpx
 import pytest
 
 from tests.integration.conftest import (
     REPO_ROOT,
-    requires_apple_silicon,
     _free_port,
-    _wait_for_healthz,
     _teardown_server,
+    _wait_for_healthz,
+    requires_apple_silicon,
 )
-
 
 BERT_MODEL = "nomic-ai/nomic-embed-text-v1.5"
 LLAMA_CPP_MODEL = "nomic-ai/nomic-embed-text-v1.5-GGUF"

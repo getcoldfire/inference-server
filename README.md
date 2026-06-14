@@ -9,6 +9,19 @@ License-clean MLX-LM inference server with an OpenAI-compatible API. Fork of [`c
 
 ---
 
+## Runtimes
+
+`coldfire-mlx-server` hosts multiple inference runtimes in one Python process:
+
+| Runtime | `model_type` | Use case |
+|---|---|---|
+| MLX-LM | `lm` | Chat completion on Apple Silicon |
+| BERT encoder | `embeddings` | Vector embeddings (nomic-1.5, BGE, mxbai variants) |
+| llama-cpp | `llama-cpp` | GGUF embeddings — wraps `llama-cpp-python` with Metal acceleration |
+
+The package name (`coldfire-mlx-server`) is historical from when MLX was
+the only runtime; a runtime-neutral rename is tracked as a future change.
+
 ## Install
 
 The supported install path is the Coldfire Homebrew tap:

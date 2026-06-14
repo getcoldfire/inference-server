@@ -3,10 +3,10 @@
 Takes raw texts, calls Llama.create_embedding(), passes the vector through
 the shared matryoshka helper, returns the OpenAI-shaped response data.
 """
+
 from __future__ import annotations
 
 import logging
-from typing import List, Optional
 
 import numpy as np
 
@@ -22,9 +22,9 @@ class LlamaCppEmbeddingsService:
 
     def embed(
         self,
-        texts: List[str],
-        dimensions: Optional[int] = None,
-    ) -> List[List[float]]:
+        texts: list[str],
+        dimensions: int | None = None,
+    ) -> list[list[float]]:
         """Return one embedding vector per input text.
 
         If `dimensions` is set, the vector is truncated + L2-renormalized via
@@ -32,7 +32,7 @@ class LlamaCppEmbeddingsService:
         normalized by llama-cpp internally when embedding=True).
         """
         llama = self.loader.ensure_loaded()
-        out: List[List[float]] = []
+        out: list[list[float]] = []
         for text in texts:
             response = llama.create_embedding(input=text)
             # llama-cpp returns: {"object": "list", "data": [{"embedding": [...]}], ...}

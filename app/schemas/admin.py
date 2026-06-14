@@ -13,7 +13,7 @@ suppresses the spurious warning about ``model_path`` / ``model_type``.
 
 from __future__ import annotations
 
-from typing import Literal, Optional
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -37,12 +37,12 @@ class AddModelRequest(BaseModel):
 
     # --- llama-cpp handler fields (model_type == "llama-cpp") ---------------
     # Required for HF-repo model_path; ignored for absolute local-path model_path.
-    hf_file: Optional[str] = None
+    hf_file: str | None = None
     # llama-cpp-python tuning knobs (sparse mirror — all optional).
-    n_gpu_layers: Optional[int] = Field(default=None, ge=-1)
-    n_ctx: Optional[int] = Field(default=None, ge=1)
-    n_batch: Optional[int] = Field(default=None, ge=1)
-    n_threads: Optional[int] = Field(default=None, ge=1)
+    n_gpu_layers: int | None = Field(default=None, ge=-1)
+    n_ctx: int | None = Field(default=None, ge=1)
+    n_batch: int | None = Field(default=None, ge=1)
+    n_threads: int | None = Field(default=None, ge=1)
 
 
 class AddModelResponse(BaseModel):
