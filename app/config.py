@@ -194,7 +194,7 @@ class MLXServerConfig:
 # Multi-model YAML configuration
 # ---------------------------------------------------------------------------
 
-VALID_MODEL_TYPES = frozenset({"lm", "embeddings"})
+VALID_MODEL_TYPES = frozenset({"lm", "embeddings", "llama-cpp"})
 
 
 @dataclass
@@ -252,6 +252,15 @@ class ModelEntryConfig:
     default_seed: int | None = None
     default_repetition_context_size: int | None = None
 
+    # --- llama-cpp handler fields (model_type == "llama-cpp") ---------------
+    # Required for HF-repo model_path; ignored for absolute local-path model_path.
+    hf_file: str | None = None
+    # llama-cpp-python tuning knobs (sparse mirror — all optional).
+    n_gpu_layers: int | None = None
+    n_ctx: int | None = None
+    n_batch: int | None = None
+    n_threads: int | None = None
+
     def __post_init__(self) -> None:
         """Resolve ``served_model_name`` and validate ``model_type``."""
         if self.served_model_name is None:
@@ -271,6 +280,21 @@ class ModelEntryConfig:
                 self.model_path,
             )
             self.kv_bits = None
+
+        # llama-cpp fields are only meaningful for model_type == "llama-cpp"
+        if self.model_type != "llama-cpp" and (
+            self.hf_file is not None
+            or self.n_gpu_layers is not None
+            or self.n_ctx is not None
+            or self.n_batch is not None
+            or self.n_threads is not None
+        ):
+            logger.warning(
+                "llama-cpp fields (hf_file, n_gpu_layers, n_ctx, n_batch, n_threads) are "
+                "only meaningful when model_type='llama-cpp'. Ignoring for model '%s' (type='%s').",
+                self.model_path,
+                self.model_type,
+            )
 
         # Speculative decoding is LM-only
         if self.draft_model_path and self.model_type != "lm":

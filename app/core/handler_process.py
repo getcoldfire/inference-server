@@ -548,10 +548,13 @@ class HandlerProcessProxy:
         Unix timestamp when the handler process was started.
     """
 
-    # Maps model_type config values to handler_type strings
+    # Maps model_type config values to handler_type strings.
+    # "llama-cpp" is a runtime dispatch kind; it advertises the FUNCTIONAL
+    # kind ("embeddings") so consumers and route guards classify correctly.
     _MODEL_TYPE_TO_HANDLER_TYPE: dict[str, str] = {
         "lm": "lm",
         "embeddings": "embeddings",
+        "llama-cpp": "embeddings",
     }
     _SAMPLING_DEFAULT_FIELDS: tuple[str, ...] = (
         "default_max_tokens",

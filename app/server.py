@@ -222,6 +222,21 @@ def create_handler_from_config(model_cfg: ModelEntryConfig) -> Any:
     """
     model_path = model_cfg.model_path
 
+    if model_cfg.model_type == "llama-cpp":
+        from .handler.llama_cpp_embeddings import LlamaCppEmbeddingsHandler
+
+        return _attach_sampling_defaults(
+            LlamaCppEmbeddingsHandler(
+                model_path=model_path,
+                hf_file=model_cfg.hf_file,
+                n_gpu_layers=model_cfg.n_gpu_layers,
+                n_ctx=model_cfg.n_ctx,
+                n_batch=model_cfg.n_batch,
+                n_threads=model_cfg.n_threads,
+            ),
+            model_cfg,
+        )
+
     if model_cfg.model_type == "embeddings":
         from .handler.mlx_embeddings import MLXEmbeddingsHandler
 
