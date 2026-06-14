@@ -14,23 +14,27 @@ import numpy as np
 def apply_dimensions(vec: np.ndarray, target_dim: int) -> np.ndarray:
     """Truncate `vec` to `target_dim` and L2-renormalize.
 
+    Accepts 1-D (single vector) or 2-D (batch of vectors, shape (batch, dim)).
+    For 2-D input, truncation and renormalization happen per row.
+
     Behavior:
-      - target_dim == len(vec): pass-through (no truncation; already L2-unit).
-      - target_dim < len(vec):  truncate then renormalize.
-      - target_dim > len(vec):  ValueError ("exceeds model embedding size").
-      - target_dim < 1:         ValueError ("must be positive").
-      - vec is all-zero:        return zeros of length target_dim (no division).
+      - target_dim == vec.shape[-1]: no truncation, but L2-renormalize is still applied.
+      - target_dim <  vec.shape[-1]: truncate then renormalize.
+      - target_dim >  vec.shape[-1]: ValueError ("exceeds model embedding size").
+      - target_dim <  1:            ValueError ("must be positive").
+      - Rows that are all-zero in 2-D input (or a 1-D zero vector): returned as zeros (no division).
 
     The returned array's dtype matches the input dtype.
     """
     if target_dim < 1:
         raise ValueError(f"dimensions must be positive integer; got {target_dim}")
-    if target_dim > len(vec):
+    native_dim = vec.shape[-1]
+    if target_dim > native_dim:
         raise ValueError(
-            f"dimensions {target_dim} exceeds model embedding size {len(vec)}"
+            f"dimensions {target_dim} exceeds model embedding size {native_dim}"
         )
-    truncated = vec[:target_dim]
-    norm = float(np.linalg.norm(truncated))
-    if norm == 0.0:
-        return truncated.copy()
-    return (truncated / norm).astype(vec.dtype)
+    truncated = vec[..., :target_dim]
+    norms = np.linalg.norm(truncated, axis=-1, keepdims=True)
+    # Replace zero norms with 1 to avoid division by zero; the zero rows stay zero.
+    safe = np.where(norms == 0.0, 1.0, norms)
+    return (truncated / safe).astype(vec.dtype)

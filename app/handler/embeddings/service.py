@@ -151,14 +151,11 @@ class EmbeddingService:
         if effective_dim is not None:
             # Delegate truncation + L2 renormalization to the shared helper so
             # the BERT path and the llama-cpp path apply identical matryoshka
-            # semantics. apply_dimensions validates the target dim, truncates,
-            # and renormalizes per vector — equivalent to the former inline
-            # batch truncation + l2_normalize(pooled[:, :effective_dim]).
-            raw_rows: list[list[float]] = pooled.tolist()  # type: ignore[assignment]
-            embeddings: list[list[float]] = [
-                apply_dimensions(np.array(row, dtype=np.float32), effective_dim).tolist()
-                for row in raw_rows
-            ]
+            # semantics. apply_dimensions accepts a 2-D array (batch, dim) and
+            # vectorizes truncation + renormalization across the whole batch in
+            # one call — no Python loop needed.
+            pooled_np = np.asarray(pooled, dtype=np.float32)
+            embeddings: list[list[float]] = apply_dimensions(pooled_np, effective_dim).tolist()
         else:
             normalized = l2_normalize(pooled)
             # tolist() on a 2-D mlx.array returns list[list[float]] at runtime,
