@@ -142,3 +142,76 @@ def test_valid_model_types_includes_llama_cpp():
     assert "llama-cpp" in VALID_MODEL_TYPES, (
         f"'llama-cpp' missing from VALID_MODEL_TYPES: {VALID_MODEL_TYPES}"
     )
+
+
+# ---------------------------------------------------------------------------
+# Regression: admin POST must pass all llama-cpp fields through model_cfg_dict
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_admin_post_llama_cpp_passes_hf_file_to_model_cfg_dict():
+    """Regression for the defect where admin POST omitted llama-cpp fields
+    from model_cfg_dict, causing on-demand subprocess load to fail with
+    hf_file=None.
+
+    The admin route handler calls register_on_demand_one with a
+    model_cfg_dict. We mock register_on_demand_one and capture the dict
+    it receives to assert all five llama-cpp fields are present.
+    """
+    import asyncio
+    from unittest.mock import AsyncMock, MagicMock, patch
+    from fastapi import Request
+
+    from app.schemas.admin import AddModelRequest
+    from app.api.admin_models import add_model
+
+    req_body = AddModelRequest(
+        model_path="nomic-ai/nomic-embed-text-v1.5-GGUF",
+        model_type="llama-cpp",
+        hf_file="nomic-embed-text-v1.5.f16.gguf",
+        n_gpu_layers=-1,
+        n_ctx=8192,
+        n_batch=512,
+        n_threads=4,
+        on_demand=True,
+        on_demand_idle_timeout=300,
+    )
+
+    captured: dict = {}
+
+    async def fake_register_on_demand_one(registry, *, model_id, model_cfg_dict, **kwargs):
+        captured["model_cfg_dict"] = model_cfg_dict
+
+    # Build a minimal mock Request with a registry on app.state
+    mock_registry = MagicMock()
+    mock_registry.list_model_ids.return_value = []
+    mock_meta = MagicMock()
+    mock_meta.id = req_body.model_path
+    mock_meta.type = "embeddings"
+    mock_meta.created_at = 0
+    mock_registry.get_metadata.return_value = mock_meta
+
+    mock_app = MagicMock()
+    mock_app.state.registry = mock_registry
+    mock_request = MagicMock(spec=Request)
+    mock_request.app = mock_app
+
+    with patch("app.api.admin_models.register_on_demand_one", side_effect=fake_register_on_demand_one):
+        await add_model(req_body, mock_request)
+
+    cfg = captured.get("model_cfg_dict", {})
+    assert cfg.get("hf_file") == "nomic-embed-text-v1.5.f16.gguf", (
+        f"hf_file missing or wrong in model_cfg_dict: {cfg}"
+    )
+    assert cfg.get("n_gpu_layers") == -1, (
+        f"n_gpu_layers missing or wrong in model_cfg_dict: {cfg}"
+    )
+    assert cfg.get("n_ctx") == 8192, (
+        f"n_ctx missing or wrong in model_cfg_dict: {cfg}"
+    )
+    assert cfg.get("n_batch") == 512, (
+        f"n_batch missing or wrong in model_cfg_dict: {cfg}"
+    )
+    assert cfg.get("n_threads") == 4, (
+        f"n_threads missing or wrong in model_cfg_dict: {cfg}"
+    )

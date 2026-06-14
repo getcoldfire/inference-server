@@ -64,6 +64,12 @@ async def add_model(req: AddModelRequest, request: Request) -> AddModelResponse:
         "on_demand_idle_timeout": req.on_demand_idle_timeout,
         "queue_timeout": req.queue_timeout,
         "queue_size": req.queue_size,
+        # llama-cpp fields — required for HF-repo GGUF paths (model_type == "llama-cpp")
+        "hf_file": req.hf_file,
+        "n_gpu_layers": req.n_gpu_layers,
+        "n_ctx": req.n_ctx,
+        "n_batch": req.n_batch,
+        "n_threads": req.n_threads,
     }
 
     try:
