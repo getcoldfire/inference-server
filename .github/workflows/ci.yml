@@ -1,17 +1,17 @@
 # Coldfire fork CI gate.
 #
-# Two jobs:
-#   1. lint-and-test (Ubuntu) — runs `make lint`, `make test`, `make
-#      license-check`. The license job is the hard gate that keeps the
-#      runtime closure permissive-only; it must stay green for every PR.
-#   2. smoke-apple-silicon (macos-latest) — runs `make test-smoke` which
-#      boots a real server on Apple Silicon and exercises the chat and
-#      embeddings smoke suites. macos-latest is Apple Silicon as of
-#      late 2024; if GitHub re-maps the label we'll pin explicitly.
-#
-# Both jobs create a repo-local `.venv` so the Makefile's `.venv/bin/...`
-# tool paths work without modification — matches developer-local
-# behavior exactly.
+# One macOS job (Apple Silicon) — the runtime closure contains
+# `mlx-metal`, which is wheel-only for arm64-darwin and has NO Linux
+# distribution. Running lint/test/license-check on Ubuntu would fail at
+# `pip install -r requirements.lock` because `mlx-metal==X.Y.Z` resolves
+# to zero matching versions on Linux. The Ubuntu `lint-and-test` job
+# that used to live here is commented out at the bottom for posterity;
+# if we ever ship a portable build it can come back. For now, single
+# macOS job covering:
+#   - make lint           (ruff check + ruff format --check + mypy)
+#   - make test           (282 unit tests)
+#   - make license-check  (76 runtime packages must all be permissive)
+#   - make test-smoke     (10 Apple-Silicon integration smokes)
 
 name: ci
 
@@ -21,33 +21,7 @@ on:
     branches: [main]
 
 jobs:
-  lint-and-test:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-
-      - name: Create venv and install pinned deps
-        run: |
-          python -m venv .venv
-          .venv/bin/pip install --upgrade pip
-          .venv/bin/pip install -r requirements.lock
-          .venv/bin/pip install pip-licenses ruff mypy
-          # Editable install so `mypy app/ tools/` can resolve the package.
-          .venv/bin/pip install -e . --no-deps
-
-      - name: make lint
-        run: make lint
-
-      - name: make test
-        run: make test
-
-      - name: make license-check
-        run: make license-check
-
-  smoke-apple-silicon:
+  apple-silicon:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
@@ -67,12 +41,66 @@ jobs:
           restore-keys: |
             hf-${{ runner.os }}-
 
-      - name: Create venv and install
+      - name: Create venv and install (runtime + dev)
         run: |
           python -m venv .venv
           .venv/bin/pip install --upgrade pip
           .venv/bin/pip install -r requirements.lock
-          .venv/bin/pip install -e .
+          # Dev deps (pytest, ruff, mypy, pip-licenses, ...) live in PEP
+          # 735 [dependency-groups].dev in pyproject.toml — invisible to
+          # pip-compile / requirements.lock. Install them explicitly so
+          # `make lint`, `make test`, and `make license-check` work.
+          # Requires pip >= 25.1.
+          .venv/bin/pip install --group dev
+          # Editable install so mypy can resolve the package.
+          .venv/bin/pip install -e . --no-deps
+
+      - name: make lint
+        run: make lint
+
+      - name: make test
+        run: make test
+
+      - name: make license-check
+        run: make license-check
 
       - name: make test-smoke
         run: make test-smoke
+
+# --- Disabled: Ubuntu lint-and-test --------------------------------------
+# Cannot run on Ubuntu — the runtime closure contains `mlx-metal`, an
+# Apple-Silicon-only wheel with zero Linux distributions. Any attempt to
+# `pip install -r requirements.lock` on Ubuntu fails with:
+#
+#     ERROR: Could not find a version that satisfies the requirement
+#            mlx-metal==X.Y.Z (from versions: none)
+#
+# Without the venv installed, `make lint` (mypy needs to import app/
+# which transitively imports mlx) and `make test` (unit tests load
+# embedding model fixtures) both fail. `make license-check` walks the
+# installed venv via importlib.metadata, also unavailable without it.
+#
+# Bring this back ONLY if a future build ships a Linux-compatible MLX
+# variant or if we structurally separate the linter-only deps from the
+# runtime closure.
+#
+#  lint-and-test:
+#    runs-on: ubuntu-latest
+#    steps:
+#      - uses: actions/checkout@v4
+#      - uses: actions/setup-python@v5
+#        with:
+#          python-version: '3.12'
+#      - name: Create venv and install pinned deps
+#        run: |
+#          python -m venv .venv
+#          .venv/bin/pip install --upgrade pip
+#          .venv/bin/pip install -r requirements.lock   # FAILS on Linux: mlx-metal
+#          .venv/bin/pip install pip-licenses ruff mypy
+#          .venv/bin/pip install -e . --no-deps
+#      - name: make lint
+#        run: make lint
+#      - name: make test
+#        run: make test
+#      - name: make license-check
+#        run: make license-check

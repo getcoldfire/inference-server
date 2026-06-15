@@ -17,25 +17,28 @@ COLDFIRE_PORT="${COLDFIRE_PORT:-8080}"
 BASE_URL="http://${COLDFIRE_HOST}:${COLDFIRE_PORT}"
 
 # Color setup — only when stdout is a tty and NO_COLOR is not set.
+# BLUE, CHECK, CROSS are used by scripts that source this file; export
+# makes them visible to sourcing scripts AND tells shellcheck they're
+# intentionally externally-visible (avoids SC2034 "appears unused").
 if [ -t 1 ] && [ -z "${NO_COLOR:-}" ]; then
-  RED=$'\033[0;31m'
-  GREEN=$'\033[0;32m'
-  YELLOW=$'\033[0;33m'
-  BLUE=$'\033[0;34m'
-  BOLD=$'\033[1m'
-  RESET=$'\033[0m'
+  export RED=$'\033[0;31m'
+  export GREEN=$'\033[0;32m'
+  export YELLOW=$'\033[0;33m'
+  export BLUE=$'\033[0;34m'
+  export BOLD=$'\033[1m'
+  export RESET=$'\033[0m'
 else
-  RED=''
-  GREEN=''
-  YELLOW=''
-  BLUE=''
-  BOLD=''
-  RESET=''
+  export RED=''
+  export GREEN=''
+  export YELLOW=''
+  export BLUE=''
+  export BOLD=''
+  export RESET=''
 fi
 
 # Tick / cross marks (plain ASCII fallback already since these are basic UTF-8)
-CHECK="${GREEN}✓${RESET}"
-CROSS="${RED}✗${RESET}"
+export CHECK="${GREEN}✓${RESET}"
+export CROSS="${RED}✗${RESET}"
 
 info() {
   printf '  %s\n' "$*"
