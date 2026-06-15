@@ -31,12 +31,12 @@ if [ "$http_code" != "200" ]; then
 fi
 
 # Prefer lsof-by-listen-port — it uniquely identifies *this* port's
-# server even when multiple coldfire-mlx-server instances are running.
+# server even when multiple coldfire-inference-server instances are running.
 # Fall back to pgrep only if lsof has no usable result (e.g. the server
 # isn't binding via a process we can see — rare).
 pids=$(lsof -nP -iTCP:"${COLDFIRE_PORT}" -sTCP:LISTEN -t 2>/dev/null || true)
 if [ -z "$pids" ]; then
-  pids=$(pgrep -f 'coldfire-mlx-server.*launch' 2>/dev/null || true)
+  pids=$(pgrep -f 'coldfire-inference-server.*launch' 2>/dev/null || true)
 fi
 
 if [ -z "$pids" ]; then
@@ -119,7 +119,7 @@ fi
 
 printf '\n'
 printf '  %sServer stopped. Relaunch with:%s\n' "$BOLD" "$RESET"
-printf '    coldfire-mlx-server launch --host %s --port %s --model-path mlx-community/Llama-3.2-1B-Instruct-4bit\n' \
+printf '    coldfire-inference-server launch --host %s --port %s --model-path mlx-community/Llama-3.2-1B-Instruct-4bit\n' \
   "$COLDFIRE_HOST" "$COLDFIRE_PORT"
 printf '\n'
 exit 0

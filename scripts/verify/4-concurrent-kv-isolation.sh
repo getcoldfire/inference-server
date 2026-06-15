@@ -223,7 +223,7 @@ if [ $foreign_marker_leak -gt 0 ]; then
   fail "KV-cache cross-contamination detected — ${foreign_marker_leak} foreign-marker leak(s)"
   printf '\n  %sThis is the bug the warm-up fix was supposed to prevent.%s\n' "$YELLOW" "$RESET"
   printf '  Please file an issue with the response bodies above at:\n'
-  printf '    https://github.com/getcoldfire/mlx-openai-server/issues\n\n'
+  printf '    https://github.com/getcoldfire/inference-server/issues\n\n'
   exit 1
 fi
 

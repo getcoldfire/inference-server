@@ -1,4 +1,4 @@
-# coldfire-mlx-server — verification suite
+# coldfire-inference-server — verification suite
 
 Run these to verify your install works correctly. They're pure bash + curl
 + python3 (for JSON parsing) — no `jq`, no venv, no Python deps. Compatible
@@ -11,7 +11,7 @@ with bash 3.2 (macOS default).
 Launch the server in one terminal:
 
 ```bash
-coldfire-mlx-server launch \
+coldfire-inference-server launch \
   --host 127.0.0.1 \
   --port 8080 \
   --model-path mlx-community/Llama-3.2-1B-Instruct-4bit
@@ -127,7 +127,7 @@ embedding models including nomic-embed-text return normalized vectors).
 Launch one in another terminal:
 
 ```bash
-coldfire-mlx-server launch \
+coldfire-inference-server launch \
   --host 127.0.0.1 \
   --port 8080 \
   --model-path mlx-community/Llama-3.2-1B-Instruct-4bit
@@ -141,7 +141,7 @@ HuggingFace. Subsequent launches are fast.
 A foreign marker appeared in a response. This is a KV-cache
 cross-contamination regression — the bug the warm-up fix is supposed to
 prevent. Please file an issue at
-<https://github.com/getcoldfire/mlx-openai-server/issues> with the response
+<https://github.com/getcoldfire/inference-server/issues> with the response
 bodies the test prints.
 
 ### Test 4 WARN — "N of 4 responses did not echo their own marker"
@@ -155,13 +155,13 @@ if it keeps WARNing, switch to a larger model
 
 ### Test 5 "shutdown test hangs" or times out at 10s
 
-cli-v2 contract violation — `coldfire-mlx-server launch` should exit
+cli-v2 contract violation — `coldfire-inference-server launch` should exit
 within 5 seconds of SIGTERM. File an issue with `ps aux | grep
-coldfire-mlx-server` output.
+coldfire-inference-server` output.
 
 ### Test 5 skips with "ambiguous — multiple PIDs"
 
-You have multiple `coldfire-mlx-server` instances running. Stop the ones
+You have multiple `coldfire-inference-server` instances running. Stop the ones
 you don't care about and re-run.
 
 ### Test 6 skips with capability mismatch

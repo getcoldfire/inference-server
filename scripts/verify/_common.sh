@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Shared helpers for the coldfire-mlx-server verification suite.
+# Shared helpers for the coldfire-inference-server verification suite.
 #
 # Sourced by run.sh and each individual test script. Provides:
 #   - Host/port detection and BASE_URL
@@ -71,7 +71,7 @@ require_server() {
     printf '\n' >&2
     printf '  Launch one in another terminal:\n' >&2
     printf '\n' >&2
-    printf '    coldfire-mlx-server launch \\\n' >&2
+    printf '    coldfire-inference-server launch \\\n' >&2
     printf '      --host %s \\\n' "$COLDFIRE_HOST" >&2
     printf '      --port %s \\\n' "$COLDFIRE_PORT" >&2
     printf '      --model-path mlx-community/Llama-3.2-1B-Instruct-4bit\n' >&2
