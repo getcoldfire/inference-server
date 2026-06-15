@@ -1,1 +1,1 @@
-"""Utility modules for the mlx-openai-server."""
+"""Utility modules for the coldfire-inference-server."""
