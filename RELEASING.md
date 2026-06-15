@@ -1,4 +1,4 @@
-# Releasing `coldfire-mlx-server`
+# Releasing `coldfire-inference-server`
 
 This is the operator-facing release runbook. Anything that needs to happen between "main is green" and "users can `brew upgrade`" lives here.
 
@@ -38,7 +38,7 @@ Catches new transitive dependencies *before* the release workflow blocks on them
 
 ```bash
 bash tools/generate_notices.sh
-diff NOTICES.txt <(curl -sL https://github.com/getcoldfire/mlx-openai-server/releases/download/v<prev>/NOTICES.txt)
+diff NOTICES.txt <(curl -sL https://github.com/getcoldfire/inference-server/releases/download/v<prev>/NOTICES.txt)
 ```
 
 Any new dependency that appears here gets a row in the diff. Inspect it. If a new dep landed in `requirements.lock` since last release, check:
@@ -107,30 +107,30 @@ The release workflow does NOT touch the tap. This step is by hand.
 
 ```bash
 curl -sL \
-  "https://github.com/getcoldfire/mlx-openai-server/archive/refs/tags/v0.X.Y.tar.gz" \
-  -o /tmp/coldfire-mlx-server-v0.X.Y.tar.gz
-shasum -a 256 /tmp/coldfire-mlx-server-v0.X.Y.tar.gz
+  "https://github.com/getcoldfire/inference-server/archive/refs/tags/v0.X.Y.tar.gz" \
+  -o /tmp/coldfire-inference-server-v0.X.Y.tar.gz
+shasum -a 256 /tmp/coldfire-inference-server-v0.X.Y.tar.gz
 ```
 
 ### 3b. Fetch SHA256 for the NOTICES.txt release asset
 
 ```bash
 curl -sL \
-  "https://github.com/getcoldfire/mlx-openai-server/releases/download/v0.X.Y/NOTICES.txt" \
+  "https://github.com/getcoldfire/inference-server/releases/download/v0.X.Y/NOTICES.txt" \
   -o /tmp/NOTICES-v0.X.Y.txt
 shasum -a 256 /tmp/NOTICES-v0.X.Y.txt
 ```
 
-### 3c. Edit `Formula/coldfire-mlx-server.rb`
+### 3c. Edit `Formula/coldfire-inference-server.rb`
 
 In the [`homebrew-coldfire`](https://github.com/getcoldfire/homebrew-coldfire) tap, update four fields:
 
 ```ruby
-url "https://github.com/getcoldfire/mlx-openai-server/archive/refs/tags/v0.X.Y.tar.gz"
+url "https://github.com/getcoldfire/inference-server/archive/refs/tags/v0.X.Y.tar.gz"
 sha256 "<source tarball sha256 from 3a>"
 
 resource "notices" do
-  url "https://github.com/getcoldfire/mlx-openai-server/releases/download/v0.X.Y/NOTICES.txt"
+  url "https://github.com/getcoldfire/inference-server/releases/download/v0.X.Y/NOTICES.txt"
   sha256 "<notices sha256 from 3b>"
 end
 ```
@@ -141,10 +141,10 @@ The formula does not carry a separate `version` field — Homebrew derives it fr
 
 ```bash
 cd /path/to/homebrew-coldfire
-git checkout -b bump-coldfire-mlx-server-v0.X.Y
-git add Formula/coldfire-mlx-server.rb
-git commit -m "coldfire-mlx-server v0.X.Y"
-git push origin bump-coldfire-mlx-server-v0.X.Y
+git checkout -b bump-coldfire-inference-server-v0.X.Y
+git add Formula/coldfire-inference-server.rb
+git commit -m "coldfire-inference-server v0.X.Y"
+git push origin bump-coldfire-inference-server-v0.X.Y
 gh pr create --fill
 ```
 
@@ -156,7 +156,7 @@ After the tap PR merges, users get the new version with:
 
 ```bash
 brew update
-brew upgrade coldfire-mlx-server
+brew upgrade coldfire-inference-server
 ```
 
 `brew update` is required — without it, Homebrew uses the cached formula and never sees the new tag.
@@ -165,7 +165,7 @@ A fresh install picks up the latest formula automatically:
 
 ```bash
 brew tap getcoldfire/coldfire
-brew install coldfire-mlx-server
+brew install coldfire-inference-server
 ```
 
 ## 5. Troubleshooting
@@ -186,9 +186,9 @@ A new transitive dependency picked up a non-allowlisted license. Look at the wor
 - If the license is actually fine but new (e.g. `Apache 2.0` not yet in the allowlist), add it to `tools/allowed_licenses.json`, commit, re-tag.
 - If the license is a real copyleft hit, the dependency cannot ship. Pin to a prior version or remove.
 
-### The release ran but `coldfire-mlx-server --licenses` prints "NOTICES.txt not bundled in this build"
+### The release ran but `coldfire-inference-server --licenses` prints "NOTICES.txt not bundled in this build"
 
-The NOTICES.txt resource sha256 in the formula is stale or the resource block was forgotten on the tap bump. The CLI looks for the file at `share/doc/coldfire-mlx-server/NOTICES.txt` (the path the formula's `install` block writes to). Re-bump the formula with the correct sha and a clean reinstall (`brew reinstall coldfire-mlx-server`).
+The NOTICES.txt resource sha256 in the formula is stale or the resource block was forgotten on the tap bump. The CLI looks for the file at `share/doc/coldfire-inference-server/NOTICES.txt` (the path the formula's `install` block writes to). Re-bump the formula with the correct sha and a clean reinstall (`brew reinstall coldfire-inference-server`).
 
 ### Soak tests are flaky on my local machine
 
