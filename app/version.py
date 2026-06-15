@@ -7,7 +7,7 @@ from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 from typing import Final
 
-PACKAGE_NAME: Final[str] = "mlx-openai-server"
+PACKAGE_NAME: Final[str] = "coldfire-inference-server"
 
 
 def _read_version_from_pyproject() -> str:
