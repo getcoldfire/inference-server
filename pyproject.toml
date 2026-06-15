@@ -48,6 +48,7 @@ dependencies = [
 [dependency-groups]
 dev = [
   "codespell",
+  "einops>=0.8,<1",  # required by sentence-transformers when loading nomic-bert (test_nomic_embed_v15_correctness)
   "mypy",
   "pre-commit",
   "psutil>=5.9,<8",
