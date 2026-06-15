@@ -40,7 +40,7 @@ async def add_model(req: AddModelRequest, request: Request) -> AddModelResponse:
         raise HTTPException(
             status_code=HTTPStatus.BAD_REQUEST,
             detail=(
-                "Resident (on_demand: false) hot-add is deferred to coldfire-mlx-server v0.1.2. "
+                "Resident (on_demand: false) hot-add is deferred to coldfire-inference-server v0.1.2. "
                 "v0.1.1 accepts on_demand: true only. Set on_demand: true (model will load on first request)."
             ),
         )

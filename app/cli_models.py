@@ -1,4 +1,4 @@
-"""Click subgroup `coldfire-mlx-server models` — local HuggingFace cache management.
+"""Click subgroup `coldfire-inference-server models` — local HuggingFace cache management.
 
 Subcommands:
   - models list   (Task 4)
@@ -28,7 +28,7 @@ def models() -> None:
     """Manage the local HuggingFace cache (list, pull, rm).
 
     Operates entirely on the local filesystem — no interaction with a
-    running coldfire-mlx-server. The three commands are CLI utilities,
+    running coldfire-inference-server. The three commands are CLI utilities,
     not service operations.
     """
 
@@ -85,7 +85,7 @@ def _relative_time(when: datetime | None) -> str:
     type=int,
     show_default=True,
     help="Port to probe for the 'serving' STATUS column. "
-    "Default 8000 matches `coldfire-mlx-server launch --port`. "
+    "Default 8000 matches `coldfire-inference-server launch --port`. "
     "cli-v2 daemon-launched forks listen on 11435 — pass --port 11435 there.",
 )
 def models_list(show_all: bool, as_json: bool, port: int) -> None:
@@ -93,7 +93,7 @@ def models_list(show_all: bool, as_json: bool, port: int) -> None:
 
     By default shows only MLX-shaped models. Use --all to include
     every cached repo (Sentence-Transformers BERTs etc.). The STATUS
-    column shows 'serving' if a coldfire-mlx-server on 127.0.0.1:<port>
+    column shows 'serving' if a coldfire-inference-server on 127.0.0.1:<port>
     advertises the model via /v1/models — defaults to port 8000.
 
     Note: STATUS matches against the fork's /v1/models `id` field. If a
@@ -216,7 +216,7 @@ def models_pull(hf_id: str, quiet: bool, include: tuple[str, ...], exclude: tupl
 
     if not is_mlx:
         click.echo(
-            f"⚠ {hf_id} doesn't look MLX-quantized — coldfire-mlx-server "
+            f"⚠ {hf_id} doesn't look MLX-quantized — coldfire-inference-server "
             f"will fail to load it. Consider mlx-community/* alternatives.",
             err=True,
         )
@@ -273,13 +273,13 @@ def _lookup_size_bytes(hf_id: str) -> int:
     type=int,
     show_default=True,
     help="Port to probe for the serving safety check. "
-    "Default matches `coldfire-mlx-server launch --port` (8000); "
+    "Default matches `coldfire-inference-server launch --port` (8000); "
     "cli-v2-daemon-launched forks listen on 11435.",
 )
 def models_rm(hf_id: str, force: bool, port: int) -> None:
     """Delete a model from the local HuggingFace cache.
 
-    Refuses by default if a coldfire-mlx-server on 127.0.0.1:<port>
+    Refuses by default if a coldfire-inference-server on 127.0.0.1:<port>
     is currently advertising the model — stop the server first or
     pass --force. This is a cache-only operation; it does NOT
     unregister the model from a running fork. To remove the
@@ -293,7 +293,7 @@ def models_rm(hf_id: str, force: bool, port: int) -> None:
     if not force and is_model_serving(hf_id, port=port):
         click.echo(
             f"refusing to remove {hf_id!r}: currently being served by "
-            f"coldfire-mlx-server on port {port}. Stop the server or "
+            f"coldfire-inference-server on port {port}. Stop the server or "
             f"pass --force to delete anyway.",
             err=True,
         )
