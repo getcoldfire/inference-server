@@ -104,3 +104,116 @@ def test_vanilla_bert_position_sensitive(bert_model):
     trail_padded = out_padded[:, 2:4, :]
     trail_unpadded = out_unpadded[:, 0:2, :]
     assert not mx.allclose(trail_padded, trail_unpadded, atol=1e-4).item()
+
+
+# ---------------------------------------------------------------------------
+# qkv_proj_bias regression tests (added after the nomic correctness bug)
+# ---------------------------------------------------------------------------
+
+
+def _enumerate_param_keys(model) -> list[str]:
+    """Walk model.parameters() and return every leaf path."""
+    keys: list[str] = []
+
+    def walk(prefix: str, p) -> None:
+        if hasattr(p, "items"):
+            for k, v in p.items():
+                walk(f"{prefix}.{k}" if prefix else k, v)
+        elif isinstance(p, list):
+            for i, v in enumerate(p):
+                walk(f"{prefix}.{i}", v)
+        else:
+            keys.append(prefix)
+
+    walk("", model.parameters())
+    return keys
+
+
+def test_bertconfig_default_qkv_proj_bias_is_true():
+    """Vanilla BERT default behavior: attention projections carry biases."""
+    cfg = BertConfig(
+        hidden_size=8,
+        num_hidden_layers=1,
+        num_attention_heads=2,
+        intermediate_size=16,
+        vocab_size=10,
+    )
+    assert cfg.qkv_proj_bias is True
+
+
+def test_bertconfig_from_dict_reads_qkv_proj_bias_false():
+    """Nomic-bert sets qkv_proj_bias=false in its config; the dataclass must
+    pick it up via BertConfig.from_dict so the encoder can build bias-free
+    attention projections.
+    """
+    cfg = BertConfig.from_dict(
+        {
+            "hidden_size": 8,
+            "num_hidden_layers": 1,
+            "num_attention_heads": 2,
+            "intermediate_size": 16,
+            "vocab_size": 10,
+            "qkv_proj_bias": False,
+        }
+    )
+    assert cfg.qkv_proj_bias is False
+
+
+def _projection_bias_keys(model) -> list[str]:
+    """Return Q/K/V/output-dense bias parameter paths from a BertModel.
+
+    LayerNorm biases (`attention.output.LayerNorm.bias`) are unrelated to
+    `qkv_proj_bias` — every LayerNorm has its own bias regardless — so
+    they're excluded here. Only the four attention Linear projections are
+    counted.
+    """
+    keys = _enumerate_param_keys(model)
+    return sorted(
+        k
+        for k in keys
+        if ".attention." in k and k.endswith(".bias") and ".LayerNorm." not in k
+    )
+
+
+def test_qkv_proj_bias_false_drops_attention_bias_params():
+    """When qkv_proj_bias=False, BertModel must not allocate any
+    attention-projection bias parameter. Otherwise safetensors that omit
+    the bias keys (nomic-bert) load with strict=False and leave
+    random-init biases in place — silently producing semantically wrong
+    embeddings (the original v0.1.x bug, mean cosine 0.18 vs ref >=0.999).
+    """
+    cfg = BertConfig(
+        hidden_size=8,
+        num_hidden_layers=2,
+        num_attention_heads=2,
+        intermediate_size=16,
+        vocab_size=10,
+        qkv_proj_bias=False,
+    )
+    model = BertModel(cfg)
+    keys = _projection_bias_keys(model)
+    assert keys == [], (
+        f"qkv_proj_bias=False must remove all attention projection biases; got {keys}"
+    )
+
+
+def test_qkv_proj_bias_true_keeps_attention_bias_params():
+    """Default vanilla-BERT path must allocate the four projection biases
+    per layer (Q, K, V, and the attention output dense). Regression guard
+    so the nomic fix doesn't accidentally strip biases from models that
+    actually have them (mxbai, BGE, etc).
+    """
+    cfg = BertConfig(
+        hidden_size=8,
+        num_hidden_layers=2,
+        num_attention_heads=2,
+        intermediate_size=16,
+        vocab_size=10,
+        qkv_proj_bias=True,
+    )
+    model = BertModel(cfg)
+    keys = _projection_bias_keys(model)
+    # Per layer: query.bias, key.bias, value.bias, attention.output.dense.bias.
+    assert len(keys) == cfg.num_hidden_layers * 4, (
+        f"expected 4 attention projection biases per layer, got {keys}"
+    )
