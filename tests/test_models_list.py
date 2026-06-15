@@ -1,4 +1,4 @@
-"""Tests for `coldfire-mlx-server models list`."""
+"""Tests for `coldfire-inference-server models list`."""
 
 from __future__ import annotations
 

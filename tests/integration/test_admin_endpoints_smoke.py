@@ -1,9 +1,9 @@
-"""End-to-end against a real coldfire-mlx-server subprocess.
+"""End-to-end against a real coldfire-inference-server subprocess.
 
 Skipped unless COLDFIRE_MLX_INTEGRATION=1. Apple Silicon only.
 Requires Llama-3.2-1B-Instruct-4bit cached in ~/.cache/huggingface/hub.
 
-Pinned to coldfire-mlx-server >= v0.1.1 by an explicit --version
+Pinned to coldfire-inference-server >= v0.1.1 by an explicit --version
 assertion in the fixture; an older binary would silently lack admin
 endpoints and the tests would meaningless-pass via 404.
 """
@@ -30,15 +30,15 @@ FIXTURE_TEMPLATE = Path(__file__).parent.parent / "fixtures" / "admin_smoke_conf
 
 
 def _assert_min_version(min_major: int, min_minor: int, min_patch: int) -> None:
-    out = subprocess.check_output(["coldfire-mlx-server", "--version"], text=True)
+    out = subprocess.check_output(["coldfire-inference-server", "--version"], text=True)
     m = re.search(r"(\d+)\.(\d+)\.(\d+)", out)
     if not m:
-        pytest.fail(f"could not parse coldfire-mlx-server --version output: {out!r}")
+        pytest.fail(f"could not parse coldfire-inference-server --version output: {out!r}")
     have = tuple(int(g) for g in m.groups())
     need = (min_major, min_minor, min_patch)
     if have < need:
         pytest.fail(
-            f"coldfire-mlx-server version {have} is too old; need >= {need}. Run `brew upgrade coldfire-mlx-server`."
+            f"coldfire-inference-server version {have} is too old; need >= {need}. Run `brew upgrade coldfire-inference-server`."
         )
 
 
@@ -64,7 +64,7 @@ def server():
         # the ~64KB pipe buffer and deadlock. WARNING level keeps this quiet
         # anyway, but DEVNULL is belt-and-suspenders.
         proc = subprocess.Popen(
-            ["coldfire-mlx-server", "launch", "--config", tmp.name],
+            ["coldfire-inference-server", "launch", "--config", tmp.name],
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
         )
