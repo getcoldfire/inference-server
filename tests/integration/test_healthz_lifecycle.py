@@ -24,6 +24,7 @@ import os
 import signal
 import subprocess
 import sys
+import tempfile
 import time
 from pathlib import Path
 
@@ -50,6 +51,10 @@ def test_healthz_200_during_load_and_when_ready() -> None:
     assert _BERT_FIXTURE.exists(), f"Missing test fixture: {_BERT_FIXTURE}"
 
     port = _free_port()
+    # Server stdio -> temp file. PIPE without a reader can deadlock the
+    # server once the OS pipe buffer fills (see _boot_server in conftest).
+    log_path = Path(tempfile.mkstemp(prefix=f"healthz-{port}-", suffix=".log")[1])
+    log_fh = log_path.open("wb")
     proc = subprocess.Popen(
         [
             sys.executable,
@@ -69,10 +74,10 @@ def test_healthz_200_during_load_and_when_ready() -> None:
         ],
         env=os.environ.copy(),
         cwd=str(_REPO_ROOT),
-        stdout=subprocess.PIPE,
+        stdout=log_fh,
         stderr=subprocess.STDOUT,
-        text=True,
     )
+    log_fh.close()
 
     try:
         # Poll quickly so the first probe lands before model load completes.
@@ -83,11 +88,11 @@ def test_healthz_200_during_load_and_when_ready() -> None:
         saw_ready = False
         while time.monotonic() < deadline:
             if proc.poll() is not None:
-                out = proc.stdout.read() if proc.stdout else ""
+                out = log_path.read_text(errors="replace") if log_path.exists() else "(no log)"
                 pytest.fail(f"server exited unexpectedly during load: {out!r}")
             try:
                 r = httpx.get(f"http://127.0.0.1:{port}/healthz", timeout=1.0)
-                observed_states.append(f"{r.status_code}:{r.json().get('model_status','?')}")
+                observed_states.append(f"{r.status_code}:{r.json().get('model_status', '?')}")
                 assert r.status_code == 200, (
                     f"/healthz returned unexpected status {r.status_code} during load: {r.text}"
                 )
@@ -112,3 +117,4 @@ def test_healthz_200_during_load_and_when_ready() -> None:
             except subprocess.TimeoutExpired:
                 proc.kill()
                 proc.wait(timeout=5)
+        log_path.unlink(missing_ok=True)

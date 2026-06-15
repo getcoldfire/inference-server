@@ -24,7 +24,7 @@ class AddModelRequest(BaseModel):
     model_config = ConfigDict(protected_namespaces=())
 
     model_path: str = Field(..., min_length=1, description="HuggingFace repo ID or local path")
-    model_type: Literal["lm", "embeddings"] = Field(default="lm")
+    model_type: Literal["lm", "embeddings", "llama-cpp"] = Field(default="lm")
     served_model_name: str | None = Field(
         default=None,
         description="Optional alias. Defaults to model_path if omitted.",
@@ -34,6 +34,15 @@ class AddModelRequest(BaseModel):
     on_demand_idle_timeout: int = Field(default=300, ge=1)
     queue_timeout: int = Field(default=300, ge=1)
     queue_size: int = Field(default=100, ge=1)
+
+    # --- llama-cpp handler fields (model_type == "llama-cpp") ---------------
+    # Required for HF-repo model_path; ignored for absolute local-path model_path.
+    hf_file: str | None = None
+    # llama-cpp-python tuning knobs (sparse mirror — all optional).
+    n_gpu_layers: int | None = Field(default=None, ge=-1)
+    n_ctx: int | None = Field(default=None, ge=1)
+    n_batch: int | None = Field(default=None, ge=1)
+    n_threads: int | None = Field(default=None, ge=1)
 
 
 class AddModelResponse(BaseModel):

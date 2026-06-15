@@ -6,35 +6,31 @@ This repository is a fork of [cubist38/mlx-openai-server](https://github.com/cub
 **Deviation policy:** No automatic upstream sync. Patches reviewed manually on Coldfire's schedule.
 **Why this fork exists:** See `docs/LICENSING.md` and the Coldfire spec at `docs/superpowers/specs/2026-06-03-mlx-openai-server-fork-spec.md` in the private monorepo.
 
-## Known upstream failures at fork point
+## Inherited upstream failures (resolved)
 
-Baseline run of `pytest tests/ --tb=line` on the audited commit (Python 3.12.13, macOS arm64, MLX
-installed) returned **125 passed, 14 failed, 4 skipped, 19 warnings**. All 14 failures are
-test-side mock/fake objects whose signatures have drifted from production code — production behavior
-appears correct, but the in-test fakes were not updated to match. None touch the code paths Coldfire
-intends to modify (audio / VLM / image-gen stripping; embedding-service replacement). Candidates for
-an upstream PR; **not** in scope for this fork.
+At fork point, `pytest tests/ --tb=line` on the audited commit returned **125 passed, 14 failed,
+4 skipped, 19 warnings**. All 14 failures were test-side mock/fake objects whose signatures drifted
+from production code — production behavior was correct, but the in-test fakes were not updated to
+match.
 
-Failing tests:
+All 14 inherited failures were fixed in this fork. See the commit
+`fix(tests): update inherited upstream fakes to match production signatures` for full details.
+The three categories of fixes applied were:
 
-- `tests/test_batch_scheduler.py::test_exact_cache_hit_is_backed_off_before_kickoff_token`
-- `tests/test_batch_scheduler.py::test_exact_non_trimmable_cache_hit_logs_info`
-  - Both fail with: `_FakeLRU.fetch_nearest_cache() got an unexpected keyword argument 'allowed_sources'`
-- `tests/test_chat_completions_prompt_history.py::test_prepare_text_request_strips_reasoning_content_from_prior_assistant_messages`
-- `tests/test_chat_completions_prompt_history.py::test_prepare_text_request_strips_reasoning_content_from_tool_call_assistant_messages`
-  - Both fail with: `'_FakeModel' object has no attribute 'has_draft_model'`
-- `tests/test_mixed_think_tool_handoff_stream_handler_integration.py` (10 tests in
-  `MixedThinkToolHandoffStreamHandlerIntegrationTests`):
-  - `test_mixed_think_tool_handoff_inside_thinking_reenters_reasoning_after_tool_parse`
-  - `test_mixed_think_tool_handoff_terminal_tool_call_before_thinking_close`
-  - `test_nonstream_qwen3_moe_tool_fallback_does_not_leak_synthetic_reasoning_prefix`
-  - `test_nonstream_step35_hides_reasoning_when_open_tag_missing_but_close_tag_present`
-  - `test_nonstream_step35_parses_tool_call_when_response_starts_with_stray_think_close`
-  - `test_stream_mixed_think_parser_preserves_literal_text_when_open_tag_is_missing`
-  - `test_stream_step35_hides_reasoning_when_open_tag_missing_but_close_tag_present`
-  - `test_stream_step35_parses_tool_call_when_open_marker_is_split_as_too_plus_l_call`
-  - `test_stream_step35_parses_tool_call_when_output_starts_with_stray_think_close`
-  - `test_stream_step35_preserves_split_parameter_close_marker_inside_tool_call`
+1. **`_FakeLRU.fetch_nearest_cache`** — 4 classes in `test_batch_scheduler.py` updated to accept
+   the `allowed_sources` keyword-only parameter added to `LRUPromptCache.fetch_nearest_cache`.
+2. **`_FakeModel` and `_FakePromptCache`** — `test_mixed_think_tool_handoff_stream_handler_integration.py`
+   updated: `_FakeModel` gained `has_draft_model`, `cache_is_batchable`, and `cache_is_trimmable`
+   class attributes; `_FakePromptCache.fetch_nearest_cache` gained the `allowed_sources` kwarg;
+   a `_configure_handler_stubs` helper added `_generation_lock`, `_batch_scheduler`, and
+   `_batch_scheduler_lock` to the bypass-`__init__` handler instances.
+3. **`_prepare_text_request` attribute access** — 2 tests in `test_chat_completions_prompt_history.py`
+   that use `object.__new__` to bypass `__init__` now set `kv_bits`, `kv_group_size`,
+   `quantized_kv_start`, and `_disable_batching` on the handler before calling the method under test.
+
+Post-fix baseline: **282 passed, 4 skipped, 0 failed, 19 warnings** (excluding `test_lifecycle.py`
+which terminates the process via SIGTERM — a pre-existing test isolation issue unrelated to these
+changes).
 
 ### Install-command note
 

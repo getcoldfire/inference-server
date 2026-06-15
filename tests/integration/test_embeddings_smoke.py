@@ -18,6 +18,7 @@ from __future__ import annotations
 import os
 import subprocess
 import sys
+import tempfile
 from collections.abc import Iterator
 from pathlib import Path
 
@@ -43,6 +44,10 @@ def tiny_bert_server() -> Iterator[str]:
     assert _BERT_FIXTURE.exists(), f"Missing fixture: {_BERT_FIXTURE}"
 
     port = _free_port()
+    # Server stdio -> temp file. PIPE without a reader can deadlock the
+    # server once the OS pipe buffer fills (see _boot_server in conftest).
+    log_path = Path(tempfile.mkstemp(prefix=f"tiny-bert-{port}-", suffix=".log")[1])
+    log_fh = log_path.open("wb")
     proc = subprocess.Popen(
         [
             sys.executable,
@@ -62,22 +67,24 @@ def tiny_bert_server() -> Iterator[str]:
         ],
         env=os.environ.copy(),
         cwd=str(_REPO_ROOT),
-        stdout=subprocess.PIPE,
+        stdout=log_fh,
         stderr=subprocess.STDOUT,
-        text=True,
     )
+    log_fh.close()
     try:
         ready = _wait_for_healthz(port, proc, timeout=60.0)
         if not ready:
+            out = log_path.read_text(errors="replace") if log_path.exists() else "(no log)"
+            proc.kill()
             try:
-                out, _ = proc.communicate(timeout=2)
+                proc.wait(timeout=2)
             except subprocess.TimeoutExpired:
-                proc.kill()
-                out, _ = proc.communicate()
+                pass
             pytest.fail(f"tiny_bert server never became ready on :{port}.\nOutput:\n{out}")
         yield f"http://127.0.0.1:{port}"
     finally:
         _teardown_server(proc)
+        log_path.unlink(missing_ok=True)
 
 
 @requires_apple_silicon
@@ -116,15 +123,16 @@ def test_embeddings_tiny_bert_smoke(tiny_bert_server: str) -> None:
 @pytest.mark.integration
 def test_embeddings_nomic_v1_5_smoke() -> None:
     """``/v1/embeddings`` against real nomic-embed-text-v1.5: 768-dim L2-norm."""
-    proc, port_back = _boot_server(EMBEDDING_MODEL_ID, model_type="embeddings")
+    proc, port_back, log_path = _boot_server(EMBEDDING_MODEL_ID, model_type="embeddings")
     try:
         ready = _wait_for_healthz(port_back, proc, timeout=300.0)
         if not ready:
+            out = log_path.read_text(errors="replace") if log_path.exists() else "(no log)"
+            proc.kill()
             try:
-                out, _ = proc.communicate(timeout=2)
+                proc.wait(timeout=2)
             except subprocess.TimeoutExpired:
-                proc.kill()
-                out, _ = proc.communicate()
+                pass
             pytest.fail(f"nomic-embed server never became ready on :{port_back}.\nOutput:\n{out}")
 
         r = httpx.post(
@@ -146,3 +154,4 @@ def test_embeddings_nomic_v1_5_smoke() -> None:
             assert abs(norm - 1.0) < 1e-4, f"item {i}: L2 norm {norm} != 1.0"
     finally:
         _teardown_server(proc)
+        log_path.unlink(missing_ok=True)

@@ -16,9 +16,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 import mlx.core as mx
+import numpy as np
 
 from app.handler.embeddings.loader import load_embedding_model
 from app.handler.embeddings.pooling import apply_pooling, l2_normalize
+from app.handler.embeddings_common import apply_dimensions
 
 
 @dataclass
@@ -143,21 +145,25 @@ class EmbeddingService:
         # `matryoshka_dim`. This mirrors the OpenAI API behavior where the
         # request field always wins.
         effective_dim = dimensions if dimensions is not None else self.matryoshka_dim
-        if effective_dim is not None:
-            native_dim = pooled.shape[-1]
-            if effective_dim <= 0 or effective_dim > native_dim:
-                raise ValueError(
-                    f"dimensions={effective_dim} is out of range; "
-                    f"must be 1 <= dimensions <= {native_dim} (model native dim)"
-                )
-            pooled = pooled[:, :effective_dim]
 
-        normalized = l2_normalize(pooled)
         prompt_tokens = int(attention_mask.sum().item())
-        # tolist() on a 2-D mlx.array returns list[list[float]] at runtime,
-        # but the stub signature is the generic union — narrow it explicitly.
+
+        if effective_dim is not None:
+            # Delegate truncation + L2 renormalization to the shared helper so
+            # the BERT path and the llama-cpp path apply identical matryoshka
+            # semantics. apply_dimensions accepts a 2-D array (batch, dim) and
+            # vectorizes truncation + renormalization across the whole batch in
+            # one call — no Python loop needed.
+            pooled_np = np.asarray(pooled, dtype=np.float32)
+            embeddings: list[list[float]] = apply_dimensions(pooled_np, effective_dim).tolist()
+        else:
+            normalized = l2_normalize(pooled)
+            # tolist() on a 2-D mlx.array returns list[list[float]] at runtime,
+            # but the stub signature is the generic union — narrow it explicitly.
+            embeddings = normalized.tolist()  # type: ignore[assignment]
+
         return EmbeddingResult(
-            embeddings=normalized.tolist(),  # type: ignore[arg-type]
+            embeddings=embeddings,
             prompt_tokens=prompt_tokens,
             total_tokens=prompt_tokens,
         )

@@ -61,6 +61,19 @@ class BertConfig:
     layer_norm_eps: float = 1e-12
     rope_theta: float = 10000.0
     matryoshka_dim: int | None = None
+    # Whether the attention projections (Q, K, V, and the attention-output dense)
+    # carry a learned bias. True for vanilla HF BERT (mxbai, BGE); False for
+    # nomic-bert (its config declares ``qkv_proj_bias: false``). When False the
+    # Linears are built bias-free, so safetensors that lack the bias keys load
+    # cleanly without leaving random-init biases in place.
+    qkv_proj_bias: bool = True
+    # RoPE rotation convention. ``False`` (default, nomic-bert / LLaMA /
+    # GPT-NeoX) splits head_dim into two halves and rotates them as a pair.
+    # ``True`` (GPT-J style) interleaves adjacent (even, odd) channel pairs.
+    # Picking the wrong value here silently scrambles every Q/K rotation
+    # (output stays L2-unit but semantically random). Reads from the HF
+    # field ``rotary_emb_interleaved`` directly via BertConfig.from_dict.
+    rotary_emb_interleaved: bool = False
 
     @classmethod
     def from_dict(cls, d: dict) -> BertConfig:
@@ -123,9 +136,10 @@ class BertSelfAttention(nn.Module):
         self.config = config
         self.num_heads = config.num_attention_heads
         self.head_dim = config.head_dim
-        self.query = nn.Linear(config.hidden_size, config.hidden_size)
-        self.key = nn.Linear(config.hidden_size, config.hidden_size)
-        self.value = nn.Linear(config.hidden_size, config.hidden_size)
+        bias = config.qkv_proj_bias
+        self.query = nn.Linear(config.hidden_size, config.hidden_size, bias=bias)
+        self.key = nn.Linear(config.hidden_size, config.hidden_size, bias=bias)
+        self.value = nn.Linear(config.hidden_size, config.hidden_size, bias=bias)
 
     def __call__(self, x: mx.array, attention_mask: mx.array | None) -> mx.array:
         B, T, _ = x.shape
@@ -135,8 +149,8 @@ class BertSelfAttention(nn.Module):
 
         if self.config.position_embedding_type == "rotary":
             cos, sin = rope_frequencies(T, self.head_dim, self.config.rope_theta)
-            q = rotary_apply(q, cos, sin)
-            k = rotary_apply(k, cos, sin)
+            q = rotary_apply(q, cos, sin, interleaved=self.config.rotary_emb_interleaved)
+            k = rotary_apply(k, cos, sin, interleaved=self.config.rotary_emb_interleaved)
 
         scale = self.head_dim**-0.5
         scores = (q @ k.transpose(0, 1, 3, 2)) * scale
@@ -144,10 +158,18 @@ class BertSelfAttention(nn.Module):
         if attention_mask is not None:
             # attention_mask: (B, T) with 1 for real, 0 for pad.
             # Broadcast to (B, 1, 1, T) and add a large negative bias on pads.
-            mask_bias = (1.0 - attention_mask.astype(scores.dtype))[:, None, None, :] * -1e9
-            scores = scores + mask_bias
-
-        attn = mx.softmax(scores.astype(mx.float32), axis=-1).astype(v.dtype)
+            #
+            # CRITICAL: compute the mask bias in fp32. Naively doing
+            # ``(1 - mask.astype(scores.dtype)) * -1e9`` on a fp16-weight
+            # model (e.g. mxbai-embed-large-v1, BGE-large) overflows
+            # ``-1e9`` to ``-inf`` when cast to fp16, and then
+            # ``0.0 * -inf = NaN`` at every real-token position — every
+            # output vector ends up NaN. fp32 keeps the constant finite.
+            mask_bias = (1.0 - attention_mask.astype(mx.float32))[:, None, None, :] * -1e9
+            scores = scores.astype(mx.float32) + mask_bias
+            attn = mx.softmax(scores, axis=-1).astype(v.dtype)
+        else:
+            attn = mx.softmax(scores.astype(mx.float32), axis=-1).astype(v.dtype)
         out = (attn @ v).transpose(0, 2, 1, 3).reshape(B, T, -1)
         return out
 
@@ -157,7 +179,7 @@ class BertSelfOutput(nn.Module):
 
     def __init__(self, config: BertConfig):
         super().__init__()
-        self.dense = nn.Linear(config.hidden_size, config.hidden_size)
+        self.dense = nn.Linear(config.hidden_size, config.hidden_size, bias=config.qkv_proj_bias)
         self.LayerNorm = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
 
     def __call__(self, x: mx.array, residual: mx.array) -> mx.array:

@@ -57,19 +57,21 @@ def _resolve_mxbai_model() -> str:
 def mxbai_server() -> Iterator[tuple[str, int, str]]:
     """Boot one mxbai-embed server per module; yield ``(url, pid, model_id)``."""
     model_id = _resolve_mxbai_model()
-    proc, port = _boot_server(model_id, model_type="embeddings")
+    proc, port, log_path = _boot_server(model_id, model_type="embeddings")
     try:
         ready = _wait_for_healthz(port, proc, timeout=300.0)
         if not ready:
+            out = log_path.read_text(errors="replace") if log_path.exists() else "(no log)"
+            proc.kill()
             try:
-                out, _ = proc.communicate(timeout=2)
+                proc.wait(timeout=2)
             except subprocess.TimeoutExpired:
-                proc.kill()
-                out, _ = proc.communicate()
+                pass
             pytest.fail(f"mxbai server failed to become healthy on :{port}.\nOutput:\n{out}")
         yield (f"http://127.0.0.1:{port}", proc.pid, model_id)
     finally:
         _teardown_server(proc)
+        log_path.unlink(missing_ok=True)
 
 
 @requires_apple_silicon

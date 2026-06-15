@@ -157,3 +157,30 @@ def test_remap_splits_nomic_combined_qkv():
     np.testing.assert_array_equal(out["encoder.layer.0.attention.self.query.weight"], combined[:H])
     np.testing.assert_array_equal(out["encoder.layer.0.attention.self.key.weight"], combined[H : 2 * H])
     np.testing.assert_array_equal(out["encoder.layer.0.attention.self.value.weight"], combined[2 * H :])
+
+
+def test_remap_swiglu_fc11_to_up_and_fc12_to_gate():
+    """Nomic-bert names the no-SiLU branch ``fc11`` and the SiLU branch ``fc12``;
+    our encoder's ``up`` is the no-SiLU branch and ``gate`` is the SiLU branch.
+
+    Swapping these (mapping fc11 -> gate and fc12 -> up) produces L2-unit
+    but semantically random embeddings (mean cosine 0.18 vs SentenceTransformer
+    reference). Regression guard: this test pins the correct direction so a
+    future "rename for clarity" refactor doesn't silently re-introduce the bug.
+    """
+    out = _remap_hf_to_internal(
+        {
+            "encoder.layer.0.mlp.fc11.weight": "fc11_val",
+            "encoder.layer.0.mlp.fc12.weight": "fc12_val",
+        },
+        is_swiglu=True,
+    )
+    # fc11 is the NO-SiLU branch -> our `up` (which also has no SiLU).
+    assert out["encoder.layer.0.mlp.up.weight"] == "fc11_val"
+    # fc12 is the SiLU branch -> our `gate` (which gets SiLU in the forward).
+    assert out["encoder.layer.0.mlp.gate.weight"] == "fc12_val"
+    # Neither should leak the opposite way.
+    assert "encoder.layer.0.mlp.gate.weight" in out
+    assert "encoder.layer.0.mlp.up.weight" in out
+    assert out["encoder.layer.0.mlp.up.weight"] != "fc12_val"
+    assert out["encoder.layer.0.mlp.gate.weight"] != "fc11_val"

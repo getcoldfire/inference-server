@@ -53,6 +53,11 @@ def test_prepare_text_request_strips_reasoning_content_from_prior_assistant_mess
     """Prepared prompt messages should not carry prior assistant reasoning text."""
     handler_cls = _load_mlx_lm_handler_class()
     handler = handler_cls.__new__(handler_cls)
+    # Minimum attributes for _prepare_text_request; __init__ normally sets these.
+    handler.kv_bits = None
+    handler.kv_group_size = 64
+    handler.quantized_kv_start = 5000
+    handler._disable_batching = True  # short-circuits _is_request_batchable before touching self.model
 
     request = ChatCompletionRequest(
         model="local-text-model",
@@ -84,6 +89,11 @@ def test_prepare_text_request_strips_reasoning_content_from_tool_call_assistant_
     """Tool-call assistant turns should preserve tool data while removing reasoning text."""
     handler_cls = _load_mlx_lm_handler_class()
     handler = handler_cls.__new__(handler_cls)
+    # Minimum attributes for _prepare_text_request; __init__ normally sets these.
+    handler.kv_bits = None
+    handler.kv_group_size = 64
+    handler.quantized_kv_start = 5000
+    handler._disable_batching = True  # short-circuits _is_request_batchable before touching self.model
 
     request = ChatCompletionRequest(
         model="local-text-model",

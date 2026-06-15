@@ -1,6 +1,6 @@
 [project]
 name = "mlx-openai-server"
-version = "0.2.2"
+version = "0.3.0"
 description = "A high-performance API server that provides OpenAI-compatible endpoints for MLX models."
 readme = "README.md"
 requires-python = ">=3.11,<3.13"
@@ -27,6 +27,7 @@ dependencies = [
   "fastapi>=0.115.14,<0.130",
   "httpx>=0.28,<1",
   "json_repair>=0.52.1,<0.60",
+  "llama-cpp-python==0.3.29",
   "loguru>=0.7.3,<0.8",
   "mlx-lm>=0.31.3,<0.32",
   "mlx>=0.31.2",
@@ -47,6 +48,7 @@ dependencies = [
 [dependency-groups]
 dev = [
   "codespell",
+  "einops>=0.8,<1",  # required by sentence-transformers when loading nomic-bert (test_nomic_embed_v15_correctness)
   "mypy",
   "pre-commit",
   "psutil>=5.9,<8",

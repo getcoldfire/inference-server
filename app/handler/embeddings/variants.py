@@ -41,32 +41,45 @@ def rope_frequencies(seq_len: int, head_dim: int, base: float = 10000.0) -> tupl
     return mx.cos(freqs), mx.sin(freqs)
 
 
-def rotary_apply(x: mx.array, cos: mx.array, sin: mx.array) -> mx.array:
+def rotary_apply(x: mx.array, cos: mx.array, sin: mx.array, *, interleaved: bool = False) -> mx.array:
     """Apply RoPE rotation to a Q/K tensor.
 
     Args:
         x: `(batch, n_heads, seq, head_dim)`. head_dim must be even.
         cos: `(seq, head_dim // 2)` precomputed cosine table.
         sin: `(seq, head_dim // 2)` precomputed sine table.
+        interleaved: If True, use the GPT-J ("interleaved") convention that
+            pairs adjacent channels (0,1),(2,3),... and rotates each pair.
+            If False (default), use the GPT-NeoX / LLaMA ("half-split")
+            convention that pairs channel ``i`` with channel ``i + dim/2``.
+            **nomic-bert sets ``rotary_emb_interleaved: false`` in its
+            config — i.e., it uses the half-split convention. Picking the
+            wrong convention here scrambles every Q and K projection
+            silently (output stays L2-unit and finite, but semantically
+            random).
 
     Returns:
         Rotated tensor with the same shape as `x`.
-
-    The rotation interleaves consecutive (even, odd) channel pairs:
-    given `(x_even, x_odd)`, output is
-    `(x_even * cos - x_odd * sin, x_even * sin + x_odd * cos)`.
     """
-    # Split into even/odd channels along the last dim.
-    x_even = x[..., 0::2]
-    x_odd = x[..., 1::2]
-    # Broadcast cos/sin to (1, 1, seq, half) so they line up against
-    # (batch, n_heads, seq, half).
     cos_b = cos[None, None, :, :]
     sin_b = sin[None, None, :, :]
-    rot_even = x_even * cos_b - x_odd * sin_b
-    rot_odd = x_even * sin_b + x_odd * cos_b
-    # Re-interleave the two halves back into (..., head_dim).
-    # Stacking on a new last axis gives (..., half, 2); reshape collapses that
-    # to (..., head_dim) interleaved as even,odd,even,odd,...
-    stacked = mx.stack([rot_even, rot_odd], axis=-1)
-    return stacked.reshape(x.shape)
+    if interleaved:
+        # GPT-J style: rotate adjacent (even, odd) channel pairs.
+        x_even = x[..., 0::2]
+        x_odd = x[..., 1::2]
+        rot_even = x_even * cos_b - x_odd * sin_b
+        rot_odd = x_even * sin_b + x_odd * cos_b
+        stacked = mx.stack([rot_even, rot_odd], axis=-1)
+        return stacked.reshape(x.shape)
+    # GPT-NeoX / LLaMA / nomic-bert style: split the head_dim into two
+    # halves and rotate them as a pair. cos/sin are precomputed for the
+    # FIRST half; we use the same table for the second half (which is
+    # what the standard "rotate_half" formulation produces — the second
+    # half's contribution is `-x_second * sin` and `x_first * sin`).
+    head_dim = x.shape[-1]
+    half = head_dim // 2
+    x_first = x[..., :half]
+    x_second = x[..., half:]
+    rot_first = x_first * cos_b - x_second * sin_b
+    rot_second = x_second * cos_b + x_first * sin_b
+    return mx.concatenate([rot_first, rot_second], axis=-1)

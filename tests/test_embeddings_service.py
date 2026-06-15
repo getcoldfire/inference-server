@@ -88,9 +88,9 @@ def test_dimensions_arg_overrides_native_dim(service):
 
 def test_dimensions_arg_rejects_out_of_range(service):
     """`dimensions=0` and `dimensions>hidden_size` both raise ValueError."""
-    with pytest.raises(ValueError, match="out of range"):
+    with pytest.raises(ValueError, match="positive"):
         service.embed(["hello"], dimensions=0)
-    with pytest.raises(ValueError, match="out of range"):
+    with pytest.raises(ValueError, match="exceeds"):
         service.embed(["hello"], dimensions=999)
 
 

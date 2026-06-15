@@ -12,13 +12,8 @@ so an empty list must now boot cleanly.
 
 from __future__ import annotations
 
-import os
-import sys
 from pathlib import Path
 from typing import Any
-
-import pytest
-
 
 # ---------------------------------------------------------------------------
 # Bug 2 — zero-models config must be accepted
@@ -33,9 +28,7 @@ def test_config_accepts_empty_models_list(tmp_path: Path) -> None:
     config_path.write_text("models: []\n", encoding="utf-8")
 
     config = load_config_from_yaml(str(config_path))
-    assert config.models == [], (
-        "Expected an empty models list; got: " + repr(config.models)
-    )
+    assert config.models == [], "Expected an empty models list; got: " + repr(config.models)
 
 
 def test_config_accepts_empty_models_list_with_server_section(tmp_path: Path) -> None:
@@ -44,10 +37,7 @@ def test_config_accepts_empty_models_list_with_server_section(tmp_path: Path) ->
 
     config_path = tmp_path / "empty_with_server.yaml"
     config_path.write_text(
-        "server:\n"
-        "  host: 127.0.0.1\n"
-        "  port: 18435\n"
-        "models: []\n",
+        "server:\n  host: 127.0.0.1\n  port: 18435\nmodels: []\n",
         encoding="utf-8",
     )
 
@@ -85,15 +75,10 @@ def test_logging_no_file_handler_by_default(tmp_path: Path, monkeypatch: Any) ->
     configure_logging()  # default args — previously created logs/app.log
 
     created = list(tmp_path.rglob("*"))
-    assert created == [], (
-        "configure_logging() must not create any files; found: "
-        + ", ".join(str(p) for p in created)
-    )
+    assert created == [], "configure_logging() must not create any files; found: " + ", ".join(str(p) for p in created)
 
 
-def test_logging_no_file_handler_with_explicit_log_file_arg(
-    tmp_path: Path, monkeypatch: Any
-) -> None:
+def test_logging_no_file_handler_with_explicit_log_file_arg(tmp_path: Path, monkeypatch: Any) -> None:
     """Passing log_file= must also be a no-op for file creation.
 
     Since we dropped file-handler support entirely, passing log_file should
@@ -107,9 +92,8 @@ def test_logging_no_file_handler_with_explicit_log_file_arg(
     configure_logging(log_file=str(tmp_path / "should_not_exist.log"))
 
     log_files = list(tmp_path.glob("*.log"))
-    assert log_files == [], (
-        "configure_logging() must not create log files; found: "
-        + ", ".join(str(p) for p in log_files)
+    assert log_files == [], "configure_logging() must not create log files; found: " + ", ".join(
+        str(p) for p in log_files
     )
 
 
