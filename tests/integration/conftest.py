@@ -18,6 +18,7 @@ import signal
 import socket
 import subprocess
 import sys
+import tempfile
 import time
 from collections.abc import Iterator
 from pathlib import Path
@@ -84,13 +85,23 @@ def _wait_for_healthz(
     return False
 
 
-def _boot_server(model_id: str, model_type: str = "lm") -> tuple[subprocess.Popen, int]:
+def _boot_server(model_id: str, model_type: str = "lm") -> tuple[subprocess.Popen, int, Path]:
     """Spawn `python -m app.main launch` for the given model.
 
-    Returns `(proc, port)`. Caller is responsible for SIGTERM teardown.
+    Returns `(proc, port, log_path)`. Caller is responsible for SIGTERM
+    teardown AND for unlinking the log file in its finally block.
+
+    Server stdout+stderr are redirected to ``log_path`` (a temp file) rather
+    than ``subprocess.PIPE``. Sustained-load soaks (15+ minutes of request
+    traffic) generate enough log output to fill the OS pipe buffer
+    (~64 KB on Darwin) and then the server's ``write()`` calls block
+    until a reader drains the pipe. The result is a 700× throughput drop
+    and spurious ``httpx.ReadTimeout`` failures. A temp file has no such
+    backpressure. Failure handlers read the file for diagnostics.
     """
     port = _free_port()
     env = os.environ.copy()
+    log_path = Path(tempfile.mkstemp(prefix=f"mlx-server-{model_type}-{port}-", suffix=".log")[1])
     cmd = [
         sys.executable,
         "-m",
@@ -107,15 +118,16 @@ def _boot_server(model_id: str, model_type: str = "lm") -> tuple[subprocess.Pope
         "--log-level",
         "WARNING",
     ]
+    log_fh = log_path.open("wb")
     proc = subprocess.Popen(
         cmd,
         env=env,
         cwd=str(REPO_ROOT),
-        stdout=subprocess.PIPE,
+        stdout=log_fh,
         stderr=subprocess.STDOUT,
-        text=True,
     )
-    return proc, port
+    log_fh.close()  # Popen has the fd; we don't need our handle
+    return proc, port, log_path
 
 
 def _teardown_server(proc: subprocess.Popen) -> None:
@@ -145,17 +157,19 @@ def chat_server() -> Iterator[tuple[str, int]]:
     if platform.machine() != "arm64" or platform.system() != "Darwin":
         pytest.skip("MLX requires Apple Silicon")
 
-    proc, port = _boot_server(CHAT_MODEL_ID, model_type="lm")
+    proc, port, log_path = _boot_server(CHAT_MODEL_ID, model_type="lm")
     try:
         ready = _wait_for_healthz(port, proc, timeout=300.0)
         if not ready:
+            out = log_path.read_text(errors="replace") if log_path.exists() else "(no log)"
+            proc.kill()
             try:
-                out, _ = proc.communicate(timeout=2)
+                proc.wait(timeout=2)
             except subprocess.TimeoutExpired:
-                proc.kill()
-                out, _ = proc.communicate()
+                pass
             pytest.fail(f"chat server failed to become healthy on :{port}.\nOutput:\n{out}")
 
         yield (f"http://127.0.0.1:{port}", proc.pid)
     finally:
         _teardown_server(proc)
+        log_path.unlink(missing_ok=True)

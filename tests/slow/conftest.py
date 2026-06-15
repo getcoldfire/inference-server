@@ -39,16 +39,18 @@ def embedding_server() -> Iterator[tuple[str, int]]:
     a fresh server but tests within one module share. Yields the PID so soaks
     can attach psutil for RSS sampling if needed.
     """
-    proc, port = _boot_server(EMBEDDING_MODEL_ID, model_type="embeddings")
+    proc, port, log_path = _boot_server(EMBEDDING_MODEL_ID, model_type="embeddings")
     try:
         ready = _wait_for_healthz(port, proc, timeout=300.0)
         if not ready:
+            out = log_path.read_text(errors="replace") if log_path.exists() else "(no log)"
+            proc.kill()
             try:
-                out, _ = proc.communicate(timeout=2)
+                proc.wait(timeout=2)
             except subprocess.TimeoutExpired:
-                proc.kill()
-                out, _ = proc.communicate()
+                pass
             pytest.fail(f"embedding server failed to become healthy on :{port}.\nOutput:\n{out}")
         yield (f"http://127.0.0.1:{port}", proc.pid)
     finally:
         _teardown_server(proc)
+        log_path.unlink(missing_ok=True)

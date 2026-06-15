@@ -116,15 +116,16 @@ def test_embeddings_tiny_bert_smoke(tiny_bert_server: str) -> None:
 @pytest.mark.integration
 def test_embeddings_nomic_v1_5_smoke() -> None:
     """``/v1/embeddings`` against real nomic-embed-text-v1.5: 768-dim L2-norm."""
-    proc, port_back = _boot_server(EMBEDDING_MODEL_ID, model_type="embeddings")
+    proc, port_back, log_path = _boot_server(EMBEDDING_MODEL_ID, model_type="embeddings")
     try:
         ready = _wait_for_healthz(port_back, proc, timeout=300.0)
         if not ready:
+            out = log_path.read_text(errors="replace") if log_path.exists() else "(no log)"
+            proc.kill()
             try:
-                out, _ = proc.communicate(timeout=2)
+                proc.wait(timeout=2)
             except subprocess.TimeoutExpired:
-                proc.kill()
-                out, _ = proc.communicate()
+                pass
             pytest.fail(f"nomic-embed server never became ready on :{port_back}.\nOutput:\n{out}")
 
         r = httpx.post(
@@ -146,3 +147,4 @@ def test_embeddings_nomic_v1_5_smoke() -> None:
             assert abs(norm - 1.0) < 1e-4, f"item {i}: L2 norm {norm} != 1.0"
     finally:
         _teardown_server(proc)
+        log_path.unlink(missing_ok=True)
