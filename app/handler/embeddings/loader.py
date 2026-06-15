@@ -90,6 +90,13 @@ def _normalize_config(cfg: dict[str, Any]) -> dict[str, Any]:
             if rt is not None:
                 out["rope_theta"] = float(rt)
 
+    # Attention projection bias — nomic-bert sets ``qkv_proj_bias: false``
+    # so the four attention projections (Q, K, V, output dense) are
+    # bias-free. The raw field is already in ``out`` (we copied the dict
+    # at the top); ``BertConfig.from_dict`` will pick it up via the
+    # dataclass field. Vanilla HF BERT models (mxbai, BGE) don't declare
+    # this field and default to ``bias=True`` per the dataclass default.
+
     return out
 
 
