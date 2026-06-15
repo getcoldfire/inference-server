@@ -256,9 +256,16 @@ def _remap_hf_to_internal(
         # ``fc11`` / ``fc12`` substrings would otherwise overlap with a naive
         # ``fc1`` rewrite, so SwiGLU is matched first.
         if is_swiglu:
-            # Nomic-bert SwiGLU: fc11 = gate, fc12 = up, fc2 = down.
-            key = key.replace(".mlp.fc11.", ".mlp.gate.")
-            key = key.replace(".mlp.fc12.", ".mlp.up.")
+            # Nomic-bert SwiGLU naming: fc11 is the NO-SiLU branch and
+            # fc12 is the SiLU branch (NomciBertGatedMLP.forward computes
+            # ``y = fc11(x); gate = fc12(x); y = y * silu(gate)``). Our
+            # encoder names the SiLU branch ``gate`` and the no-SiLU
+            # branch ``up`` (LLaMA convention: ``silu(gate) * up``), so
+            # fc11 -> up and fc12 -> gate. Mapping them the other way
+            # produces L2-unit but semantically random embeddings
+            # (mean cosine 0.18 vs SentenceTransformer reference).
+            key = key.replace(".mlp.fc11.", ".mlp.up.")
+            key = key.replace(".mlp.fc12.", ".mlp.gate.")
             key = key.replace(".mlp.fc2.", ".mlp.down.")
         else:
             # Vanilla BERT MLP pair.

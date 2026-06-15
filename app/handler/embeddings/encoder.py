@@ -67,6 +67,13 @@ class BertConfig:
     # Linears are built bias-free, so safetensors that lack the bias keys load
     # cleanly without leaving random-init biases in place.
     qkv_proj_bias: bool = True
+    # RoPE rotation convention. ``False`` (default, nomic-bert / LLaMA /
+    # GPT-NeoX) splits head_dim into two halves and rotates them as a pair.
+    # ``True`` (GPT-J style) interleaves adjacent (even, odd) channel pairs.
+    # Picking the wrong value here silently scrambles every Q/K rotation
+    # (output stays L2-unit but semantically random). Reads from the HF
+    # field ``rotary_emb_interleaved`` directly via BertConfig.from_dict.
+    rotary_emb_interleaved: bool = False
 
     @classmethod
     def from_dict(cls, d: dict) -> BertConfig:
@@ -142,8 +149,8 @@ class BertSelfAttention(nn.Module):
 
         if self.config.position_embedding_type == "rotary":
             cos, sin = rope_frequencies(T, self.head_dim, self.config.rope_theta)
-            q = rotary_apply(q, cos, sin)
-            k = rotary_apply(k, cos, sin)
+            q = rotary_apply(q, cos, sin, interleaved=self.config.rotary_emb_interleaved)
+            k = rotary_apply(k, cos, sin, interleaved=self.config.rotary_emb_interleaved)
 
         scale = self.head_dim**-0.5
         scores = (q @ k.transpose(0, 1, 3, 2)) * scale
