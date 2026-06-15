@@ -112,7 +112,7 @@ info "${CHECK} /healthz no longer responds (HTTP ${http_after})"
 if [ $within_5 -eq 1 ]; then
   pass "clean shutdown (${elapsed}s, <5s target)"
 elif [ $within_10 -eq 1 ]; then
-  printf '%sWARN%s — exit took ${elapsed}s (within 10s deadline, but >5s target)\n' "$YELLOW" "$RESET"
+  printf '%sWARN%s — exit took %ss (within 10s deadline, but >5s target)\n' "$YELLOW" "$RESET" "$elapsed"
   printf '\n'
   pass "shutdown completed (${elapsed}s)"
 fi
