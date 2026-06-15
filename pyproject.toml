@@ -1,6 +1,6 @@
 [project]
-name = "mlx-openai-server"
-version = "0.3.0"
+name = "coldfire-inference-server"
+version = "0.4.0"
 description = "A high-performance API server that provides OpenAI-compatible endpoints for MLX models."
 readme = "README.md"
 requires-python = ">=3.11,<3.13"
@@ -80,7 +80,7 @@ app = ["py.typed"]
 Homepage = "https://github.com/cubist38/mlx-openai-server"
 
 [project.scripts]
-coldfire-mlx-server = "app.cli:cli"
+coldfire-inference-server = "app.cli:cli"
 
 [build-system]
 requires = ["setuptools>=77.0"]
