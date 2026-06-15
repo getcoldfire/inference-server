@@ -168,11 +168,7 @@ def _projection_bias_keys(model) -> list[str]:
     counted.
     """
     keys = _enumerate_param_keys(model)
-    return sorted(
-        k
-        for k in keys
-        if ".attention." in k and k.endswith(".bias") and ".LayerNorm." not in k
-    )
+    return sorted(k for k in keys if ".attention." in k and k.endswith(".bias") and ".LayerNorm." not in k)
 
 
 def test_qkv_proj_bias_false_drops_attention_bias_params():
@@ -192,9 +188,7 @@ def test_qkv_proj_bias_false_drops_attention_bias_params():
     )
     model = BertModel(cfg)
     keys = _projection_bias_keys(model)
-    assert keys == [], (
-        f"qkv_proj_bias=False must remove all attention projection biases; got {keys}"
-    )
+    assert keys == [], f"qkv_proj_bias=False must remove all attention projection biases; got {keys}"
 
 
 def test_qkv_proj_bias_true_keeps_attention_bias_params():
@@ -214,6 +208,4 @@ def test_qkv_proj_bias_true_keeps_attention_bias_params():
     model = BertModel(cfg)
     keys = _projection_bias_keys(model)
     # Per layer: query.bias, key.bias, value.bias, attention.output.dense.bias.
-    assert len(keys) == cfg.num_hidden_layers * 4, (
-        f"expected 4 attention projection biases per layer, got {keys}"
-    )
+    assert len(keys) == cfg.num_hidden_layers * 4, f"expected 4 attention projection biases per layer, got {keys}"

@@ -172,9 +172,7 @@ def test_sigterm_exits_within_5s() -> None:
         elapsed = time.monotonic() - start
 
         out_for_msg = log_path.read_text(errors="replace") if log_path.exists() else ""
-        assert proc.returncode == 0, (
-            f"expected exit code 0, got {proc.returncode}; output:\n{out_for_msg}"
-        )
+        assert proc.returncode == 0, f"expected exit code 0, got {proc.returncode}; output:\n{out_for_msg}"
         assert elapsed < SHUTDOWN_DEADLINE_SECONDS, (
             f"SIGTERM exit took {elapsed:.2f}s, budget is {SHUTDOWN_DEADLINE_SECONDS}s"
         )
@@ -183,4 +181,3 @@ def test_sigterm_exits_within_5s() -> None:
             proc.kill()
             proc.wait(timeout=5)
         log_path.unlink(missing_ok=True)
-

@@ -152,7 +152,6 @@ def test_llama_cpp_5min_continuous_embedding_soak(
     )
 
     assert failures == 0, (
-        f"{failures}/{request_count + failures} requests failed during soak; "
-        f"samples: {failure_samples}"
+        f"{failures}/{request_count + failures} requests failed during soak; samples: {failure_samples}"
     )
     assert growth_mb < 200, f"RSS grew {growth_mb:.1f} MB over 5 min (ceiling 200 MB)"
