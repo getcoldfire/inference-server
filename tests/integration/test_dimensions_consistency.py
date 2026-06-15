@@ -9,7 +9,9 @@ import os
 import platform
 import subprocess
 import sys
+import tempfile
 from collections.abc import Iterator
+from pathlib import Path
 
 import httpx
 import pytest
@@ -55,27 +57,33 @@ def dual_embed_server() -> Iterator[str]:
         f"    served_model_name: {LLAMA_CPP_MODEL}\n"
     )
     env = os.environ.copy()
+    # Server stdio -> temp file (see _boot_server in conftest for the
+    # rationale; PIPE without a reader can deadlock).
+    log_path = Path(tempfile.mkstemp(prefix=f"dual-embed-{port}-", suffix=".log")[1])
+    log_fh = log_path.open("wb")
     proc = subprocess.Popen(
         [sys.executable, "-m", "app.main", "launch", "--config", str(_CONFIG_PATH)],
         env=env,
         cwd=str(REPO_ROOT),
-        stdout=subprocess.PIPE,
+        stdout=log_fh,
         stderr=subprocess.STDOUT,
-        text=True,
     )
+    log_fh.close()
     try:
         ready = _wait_for_healthz(port, proc, timeout=1500.0)  # 25 min for cold double-download
         if not ready:
+            out = log_path.read_text(errors="replace") if log_path.exists() else "(no log)"
+            proc.kill()
             try:
-                out, _ = proc.communicate(timeout=2)
+                proc.wait(timeout=2)
             except subprocess.TimeoutExpired:
-                proc.kill()
-                out, _ = proc.communicate()
+                pass
             pytest.fail(f"dual-embed server failed to become healthy on :{port}.\nOutput:\n{out}")
         yield f"http://127.0.0.1:{port}"
     finally:
         _teardown_server(proc)
         _CONFIG_PATH.unlink(missing_ok=True)
+        log_path.unlink(missing_ok=True)
 
 
 @requires_apple_silicon

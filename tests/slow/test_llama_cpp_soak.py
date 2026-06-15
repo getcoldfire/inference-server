@@ -117,6 +117,9 @@ def test_llama_cpp_5min_continuous_embedding_soak(
     deadline = time.monotonic() + 300  # 5 minutes
     request_count = 0
     failures = 0
+    # Sample the first few failure messages so an unexpected regression
+    # surfaces a specific exception type instead of just a counter.
+    failure_samples: list[str] = []
 
     with httpx.Client(timeout=30) as c:
         while time.monotonic() < deadline:
@@ -128,8 +131,14 @@ def test_llama_cpp_5min_continuous_embedding_soak(
                 )
                 r.raise_for_status()
                 request_count += 1
-            except Exception:
+            except httpx.HTTPError as e:
+                # Narrowed from bare ``except Exception``: scope to the httpx
+                # error hierarchy so an unrelated bug (e.g. JSON parse error
+                # in the test itself) crashes loudly rather than being
+                # silently counted as a soak failure.
                 failures += 1
+                if len(failure_samples) < 5:
+                    failure_samples.append(f"{type(e).__name__}: {str(e)[:200]}")
 
     final_rss = proc.memory_info().rss
     growth_mb = (final_rss - baseline_rss) / (1024 * 1024)
@@ -139,8 +148,11 @@ def test_llama_cpp_5min_continuous_embedding_soak(
         f"Baseline RSS: {baseline_rss / 1024 / 1024:.1f} MB. "
         f"Final RSS: {final_rss / 1024 / 1024:.1f} MB. "
         f"Growth: {growth_mb:.1f} MB. "
-        f"Failures: {failures}."
+        f"Failures: {failures}{'; samples: ' + str(failure_samples) if failure_samples else ''}."
     )
 
-    assert failures == 0, f"{failures}/{request_count + failures} requests failed during soak"
+    assert failures == 0, (
+        f"{failures}/{request_count + failures} requests failed during soak; "
+        f"samples: {failure_samples}"
+    )
     assert growth_mb < 200, f"RSS grew {growth_mb:.1f} MB over 5 min (ceiling 200 MB)"

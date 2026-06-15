@@ -19,7 +19,9 @@ import os
 import platform
 import subprocess
 import sys
+import tempfile
 from collections.abc import Iterator
+from pathlib import Path
 
 import httpx
 import pytest
@@ -59,28 +61,35 @@ def llama_cpp_server() -> Iterator[tuple[str, int]]:
         f"    served_model_name: {PILOT_MODEL_ID}\n"
     )
     env = os.environ.copy()
+    # Server stdio goes to a temp file — same rationale as _boot_server in
+    # tests/integration/conftest.py: subprocess.PIPE without a reader can
+    # deadlock the server once the OS pipe buffer fills.
+    log_path = Path(tempfile.mkstemp(prefix=f"llama-cpp-smoke-{port}-", suffix=".log")[1])
+    log_fh = log_path.open("wb")
     proc = subprocess.Popen(
         [sys.executable, "-m", "app.main", "launch", "--config", str(_CONFIG_PATH)],
         env=env,
         cwd=str(REPO_ROOT),
-        stdout=subprocess.PIPE,
+        stdout=log_fh,
         stderr=subprocess.STDOUT,
-        text=True,
     )
+    log_fh.close()
     try:
         # 15-minute deadline accommodates first-time GGUF download.
         ready = _wait_for_healthz(port, proc, timeout=900.0)
         if not ready:
+            out = log_path.read_text(errors="replace") if log_path.exists() else "(no log)"
+            proc.kill()
             try:
-                out, _ = proc.communicate(timeout=2)
+                proc.wait(timeout=2)
             except subprocess.TimeoutExpired:
-                proc.kill()
-                out, _ = proc.communicate()
+                pass
             pytest.fail(f"llama-cpp server failed to become healthy on :{port}.\nOutput:\n{out}")
         yield (f"http://127.0.0.1:{port}", proc.pid)
     finally:
         _teardown_server(proc)
         _CONFIG_PATH.unlink(missing_ok=True)
+        log_path.unlink(missing_ok=True)
 
 
 @requires_apple_silicon

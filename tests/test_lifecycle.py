@@ -22,6 +22,7 @@ import signal
 import socket
 import subprocess
 import sys
+import tempfile
 import time
 from pathlib import Path
 
@@ -120,7 +121,11 @@ def test_sigterm_exits_within_5s() -> None:
 
     port = _free_port()
     env = os.environ.copy()
-    # Surface child output if the test fails for diagnosis.
+    # Server stdio -> temp file. PIPE without a reader can deadlock the
+    # server once the OS pipe buffer fills (see _boot_server in
+    # tests/integration/conftest.py).
+    log_path = Path(tempfile.mkstemp(prefix=f"lifecycle-{port}-", suffix=".log")[1])
+    log_fh = log_path.open("wb")
     proc = subprocess.Popen(
         [
             sys.executable,
@@ -140,20 +145,20 @@ def test_sigterm_exits_within_5s() -> None:
         ],
         env=env,
         cwd=str(_REPO_ROOT),
-        stdout=subprocess.PIPE,
+        stdout=log_fh,
         stderr=subprocess.STDOUT,
-        text=True,
     )
+    log_fh.close()
 
     try:
         ready = _wait_for_healthz(port, proc, timeout=60.0)
         if not ready:
-            # Capture output so the failure message is actionable.
+            out = log_path.read_text(errors="replace") if log_path.exists() else "(no log)"
+            proc.kill()
             try:
-                out, _ = proc.communicate(timeout=2)
+                proc.wait(timeout=2)
             except subprocess.TimeoutExpired:
-                proc.kill()
-                out, _ = proc.communicate()
+                pass
             pytest.fail(f"Server never became ready on :{port}.\nOutput:\n{out}")
 
         # Send SIGTERM and time the exit.
@@ -166,8 +171,9 @@ def test_sigterm_exits_within_5s() -> None:
             pytest.fail(f"Process did not exit within {SHUTDOWN_DEADLINE_SECONDS + 2.0}s of SIGTERM")
         elapsed = time.monotonic() - start
 
+        out_for_msg = log_path.read_text(errors="replace") if log_path.exists() else ""
         assert proc.returncode == 0, (
-            f"expected exit code 0, got {proc.returncode}; output:\n{proc.stdout.read() if proc.stdout else ''}"
+            f"expected exit code 0, got {proc.returncode}; output:\n{out_for_msg}"
         )
         assert elapsed < SHUTDOWN_DEADLINE_SECONDS, (
             f"SIGTERM exit took {elapsed:.2f}s, budget is {SHUTDOWN_DEADLINE_SECONDS}s"
@@ -176,3 +182,5 @@ def test_sigterm_exits_within_5s() -> None:
         if proc.poll() is None:
             proc.kill()
             proc.wait(timeout=5)
+        log_path.unlink(missing_ok=True)
+
