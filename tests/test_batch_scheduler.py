@@ -667,9 +667,6 @@ async def test_exact_non_trimmable_cache_hit_falls_back_to_reprefill(patched_sch
     assert chunks[-1].cached_prompt_tokens == 0
 
 
-
-
-
 @pytest.mark.asyncio
 async def test_exact_non_trimmable_cache_hit_logs_info(patched_scheduler):
     """Discarded exact hits should be logged so latency regressions are visible."""
