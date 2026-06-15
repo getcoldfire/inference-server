@@ -20,6 +20,7 @@ from pathlib import Path
 from typing import Any
 
 import mlx.core as mx
+from loguru import logger
 from safetensors.numpy import load_file
 from transformers import AutoTokenizer
 
@@ -27,6 +28,81 @@ from app.handler.embeddings.encoder import BertConfig, BertModel
 
 SUPPORTED_ACTIVATIONS = {"gelu", "swiglu"}
 SUPPORTED_POSITION_EMBEDDINGS = {"absolute", "rotary"}
+
+# Keys that are legitimately allowed to mismatch between the model's
+# expected parameters and the safetensors provided. See the long comment
+# above ``model.load_weights(..., strict=False)`` in load_embedding_model
+# for the rationale per entry. Anything outside this set surfaces as a
+# WARN log so a new model variant (or a refactor that silently drops a
+# parameter) doesn't ship random-initialized weights to production.
+_EXPECTED_LOAD_MISMATCHES = {
+    # Provided by safetensors, NOT used by our BertModel — vanilla HF BERT
+    # ships a [CLS]-pooler head we discard.
+    "unused": frozenset(
+        {
+            "pooler.dense.weight",
+            "pooler.dense.bias",
+        }
+    ),
+    # Expected by our BertModel, but legitimately absent from safetensors.
+    # (Empty today — kept for future variants that drop sub-modules.)
+    "missing": frozenset(),
+}
+
+
+def _enumerate_param_keys(model: BertModel) -> list[str]:
+    """Walk model.parameters() and return every leaf path. Used to compute
+    the expected/provided diff in ``_check_load_completeness``.
+    """
+    keys: list[str] = []
+
+    def walk(prefix: str, p: Any) -> None:
+        if hasattr(p, "items"):
+            for k, v in p.items():
+                walk(f"{prefix}.{k}" if prefix else k, v)
+        elif isinstance(p, list):
+            for i, v in enumerate(p):
+                walk(f"{prefix}.{i}", v)
+        else:
+            keys.append(prefix)
+
+    walk("", model.parameters())
+    return keys
+
+
+def _check_load_completeness(
+    model: BertModel,
+    mlx_weights: dict[str, Any],
+    model_id: str,
+) -> None:
+    """Diff the model's expected parameter keys against the safetensors-
+    provided keys; warn if anything is outside ``_EXPECTED_LOAD_MISMATCHES``.
+
+    Defense-in-depth for the ``strict=False`` load. Catches the class of
+    bug where a new HF-config variant changes the weight names but our
+    remap doesn't update — silently leaving parameters at small-uniform
+    Linear init (which produces L2-unit but semantically random vectors,
+    exactly the v0.1.x nomic ``qkv_proj_bias`` failure mode).
+    """
+    expected = set(_enumerate_param_keys(model))
+    provided = set(mlx_weights.keys())
+    missing = sorted((expected - provided) - _EXPECTED_LOAD_MISMATCHES["missing"])
+    unused = sorted((provided - expected) - _EXPECTED_LOAD_MISMATCHES["unused"])
+    if missing:
+        logger.warning(
+            "embedding load: {} key(s) expected by model but missing from "
+            "{}; affected weights will load at random initialization: {}",
+            len(missing),
+            model_id,
+            missing[:10] if len(missing) <= 10 else missing[:10] + ["..."],
+        )
+    if unused:
+        logger.warning(
+            "embedding load: {} key(s) provided by {} but no destination in the model; quietly ignored: {}",
+            len(unused),
+            model_id,
+            unused[:10] if len(unused) <= 10 else unused[:10] + ["..."],
+        )
 
 
 class UnsupportedModelError(ValueError):
@@ -327,10 +403,31 @@ def load_embedding_model(
     mlx_weights = {k: mx.array(v) for k, v in remapped.items()}
 
     model = BertModel(bert_cfg)
-    # strict=False because:
-    #   - Some keys may not be present in the safetensors file (e.g. position
-    #     embedding when the config requests rotary).
-    #   - And vice versa — extra keys (e.g. a `pooler.dense.weight` we don't use).
+    # strict=False is intentional and load-bearing — DO NOT tighten to
+    # strict=True without first updating the expected-mismatch allowlist
+    # in ``_EXPECTED_LOAD_MISMATCHES`` below. The legitimate cases are:
+    #
+    #   - Model expects key but safetensors don't have it:
+    #       * ``embeddings.position_embeddings.weight`` when config requests
+    #         rotary (position_embedding_type="rotary"). The encoder skips
+    #         construction in that case, so this won't actually fire today —
+    #         kept here as a reminder if BertEmbeddings is ever refactored.
+    #       * ``embeddings.token_type_embeddings.weight`` for nomic-bert
+    #         (type_vocab_size=0 in our internal handling).
+    #
+    #   - Safetensors have key but model doesn't:
+    #       * ``pooler.dense.{weight,bias}`` on vanilla HF BERT models
+    #         (mxbai, BGE). Their checkpoints include the [CLS]-pooler
+    #         head; sentence-transformers reads from the final hidden
+    #         state and applies its own pooling, so the pooler is dead
+    #         weight for us. ~10 MB per 1024-dim model.
+    #
+    # Pre-load diff is logged in ``_check_load_completeness`` below so a new
+    # variant that introduces unexpected missing/unused keys surfaces as a
+    # warning instead of (a) random-init parameters silently producing wrong
+    # embeddings — exactly the v0.1.x nomic bias bug — or (b) extra weights
+    # quietly bloating memory.
+    _check_load_completeness(model, mlx_weights, model_path)
     model.load_weights(list(mlx_weights.items()), strict=False)
 
     tokenizer = AutoTokenizer.from_pretrained(str(model_dir))
