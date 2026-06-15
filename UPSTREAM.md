@@ -59,8 +59,8 @@ Not yet submitted to upstream cubist38.
 
 ## Coldfire-specific CLI commands (not in upstream cubist38/mlx-openai-server)
 
-- `coldfire-mlx-server models list` (since v0.2.0) — list local HF cache contents; MLX-shape filter by default, `--all` shows everything; `--json` for machine output; STATUS column probes a running fork on `--port`.
-- `coldfire-mlx-server models pull <hf-id>` (since v0.2.0) — download a model without registering. Conservative allowlist (`*.safetensors`, `*.json`, `tokenizer*`, `*.txt`) with `--include`/`--exclude` overrides. Warns on non-MLX-shaped repos but completes the download.
-- `coldfire-mlx-server models rm <hf-id>` (since v0.2.0) — delete a cache directory. Refuses by default if the model is currently being served; `--force` overrides but stays cache-only (does not unregister).
+- `coldfire-inference-server models list` (since v0.2.0) — list local HF cache contents; MLX-shape filter by default, `--all` shows everything; `--json` for machine output; STATUS column probes a running fork on `--port`.
+- `coldfire-inference-server models pull <hf-id>` (since v0.2.0) — download a model without registering. Conservative allowlist (`*.safetensors`, `*.json`, `tokenizer*`, `*.txt`) with `--include`/`--exclude` overrides. Warns on non-MLX-shaped repos but completes the download.
+- `coldfire-inference-server models rm <hf-id>` (since v0.2.0) — delete a cache directory. Refuses by default if the model is currently being served; `--force` overrides but stays cache-only (does not unregister).
 
 These are local-filesystem operations only — no HTTP surface, no admin endpoints. They complement the v0.1.1 hot-add admin endpoints (which manage the running server's registration state) by exposing the orthogonal cache dimension.
