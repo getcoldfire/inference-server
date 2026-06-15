@@ -61,25 +61,31 @@ def llama_cpp_soak_server() -> Iterator[tuple[str, int]]:
         "    model_type: llama-cpp\n"
         f"    served_model_name: {MODEL_ID}\n"
     )
+    # IMPORTANT: a 5-min soak emits enough log volume to fill the OS pipe
+    # buffer (~64 KB on macOS). If we used subprocess.PIPE without a reader
+    # thread, the server would block on write() halfway through and drop
+    # throughput from ~200 req/s to <1 req/s — exactly what surfaced as
+    # "10/88 failures" the first time this test ran. DEVNULL is the right
+    # fix because the soak doesn't need server output; healthz polling
+    # already covers liveness.
     env = os.environ.copy()
     proc = subprocess.Popen(
         [sys.executable, "-m", "app.main", "launch", "--config", str(_CONFIG_PATH)],
         env=env,
         cwd=str(REPO_ROOT),
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        text=True,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
     )
     try:
         # 15-minute deadline accommodates first-time GGUF download (~250 MB).
         ready = _wait_for_healthz(port, proc, timeout=900.0)
         if not ready:
+            proc.kill()
             try:
-                out, _ = proc.communicate(timeout=2)
+                proc.wait(timeout=2)
             except subprocess.TimeoutExpired:
-                proc.kill()
-                out, _ = proc.communicate()
-            pytest.fail(f"llama-cpp soak server failed to become healthy on :{port}.\nOutput:\n{out}")
+                pass
+            pytest.fail(f"llama-cpp soak server failed to become healthy on :{port}")
         yield (f"http://127.0.0.1:{port}", proc.pid)
     finally:
         _teardown_server(proc)
