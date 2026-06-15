@@ -97,12 +97,12 @@ def _candidate_notices_paths() -> list[Path]:
     over a source checkout when both happen to exist (e.g. a developer
     who ``brew install``ed and also has the repo cloned).
 
-    1. ``<formula_prefix>/share/doc/coldfire-mlx-server/NOTICES.txt`` —
+    1. ``<formula_prefix>/share/doc/coldfire-inference-server/NOTICES.txt`` —
        the canonical Homebrew Cellar layout. Homebrew Python formulas
        create a venv at ``<formula_prefix>/libexec``, so ``sys.prefix``
        points at that ``libexec`` directory and ``sys.prefix.parent`` is
-       the formula prefix (e.g. ``Cellar/coldfire-mlx-server/1.8.1/``).
-    2. ``<sys.prefix>/share/doc/coldfire-mlx-server/NOTICES.txt`` — for
+       the formula prefix (e.g. ``Cellar/coldfire-inference-server/1.8.1/``).
+    2. ``<sys.prefix>/share/doc/coldfire-inference-server/NOTICES.txt`` — for
        installs where the venv lives at the formula prefix directly
        (some Homebrew Python recipes do this instead of using
        ``libexec``).
@@ -110,7 +110,7 @@ def _candidate_notices_paths() -> list[Path]:
        editable installs (current behavior).
     """
     notices_name = "NOTICES.txt"
-    brew_doc_subpath = Path("share") / "doc" / "coldfire-mlx-server" / notices_name
+    brew_doc_subpath = Path("share") / "doc" / "coldfire-inference-server" / notices_name
     return [
         # Homebrew Cellar libexec layout: $(prefix)/libexec  →  $(prefix)/share/doc/...
         Path(sys.prefix).parent / brew_doc_subpath,

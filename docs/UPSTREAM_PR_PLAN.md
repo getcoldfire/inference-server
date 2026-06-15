@@ -61,7 +61,7 @@ The full prior-art-aware recommendation is in [Revised Status & Next Steps](#rev
 
 ## Executive Summary
 
-While building the `getcoldfire/mlx-openai-server` fork's integration test suite, we discovered that **chat completions through `BatchScheduler` raise `RuntimeError: There is no Stream(gpu, N) in current thread.` on every request** in pristine upstream `cubist38/mlx-openai-server@4b7d4b6`. The bug is reproducible against bare upstream with zero Coldfire modifications.
+While building the `getcoldfire/inference-server` fork's integration test suite, we discovered that **chat completions through `BatchScheduler` raise `RuntimeError: There is no Stream(gpu, N) in current thread.` on every request** in pristine upstream `cubist38/mlx-openai-server@4b7d4b6`. The bug is reproducible against bare upstream with zero Coldfire modifications.
 
 Root cause is in `ml-explore/mlx-lm`: model forward passes trigger lazy MLX allocations that bind to whichever thread first touches them. When the scheduler thread is that first thread, later cross-thread evaluations fail because MLX requires the stream to be resident in the current thread.
 
@@ -591,7 +591,7 @@ When converting our internal commits to upstream PRs:
 
 - [ ] Remove `cubist38/mlx-openai-server@4b7d4b6` SHA references (replace with `current main` or `HEAD`)
 - [ ] Remove `Co-Authored-By: Claude` lines if upstream doesn't accept LLM co-authorship
-- [ ] Remove any references to "Coldfire" or `getcoldfire/mlx-openai-server`
+- [ ] Remove any references to "Coldfire" or `getcoldfire/inference-server`
 - [ ] Reframe "upstream bug" language — for the cubist38 PR, the bug IS upstream to cubist38 (it's in mlx-lm), so "upstream" means mlx-lm not us
 - [ ] Replace internal repro paths (e.g., `/Users/mikewilliams/Source/...`) with generic placeholders
 - [ ] Verify the test file paths in the PR match cubist38's layout if we're adding tests; if their CI structure differs, adapt
@@ -620,7 +620,7 @@ When converting our internal commits to upstream PRs:
 ## Useful Links
 
 ### Our fork's commits
-- `8547c67` — BatchScheduler warm-up + main loop stream wrap: `git show 8547c67` in `getcoldfire/mlx-openai-server`
+- `8547c67` — BatchScheduler warm-up + main loop stream wrap: `git show 8547c67` in `getcoldfire/inference-server`
 - `c90e01d` — EmbeddingService warm-up + nomic-bert remap (only the warm-up portion goes upstream; the nomic remap is Coldfire-specific because cubist38 doesn't need it after the GPLv3 dep removal)
 
 ### Reference reading

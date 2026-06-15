@@ -5,8 +5,8 @@ Two helpers:
   - serving_model_ids(port, timeout) — batch fetch the full advertised set
 
 Used by:
-  - `coldfire-mlx-server models list` (STATUS column, via serving_model_ids)
-  - `coldfire-mlx-server models rm` (safety check, via is_model_serving)
+  - `coldfire-inference-server models list` (STATUS column, via serving_model_ids)
+  - `coldfire-inference-server models rm` (safety check, via is_model_serving)
 
 Returns False (or empty set) on any error (connection refused, timeout,
 non-200, malformed JSON). Defaults to 500ms timeout so callers stay
@@ -42,7 +42,7 @@ def _fetch_models(port: int, timeout: float) -> list[dict] | None:
 
 
 def is_model_serving(hf_id: str, port: int = 8000, timeout: float = 0.5) -> bool:
-    """Return True iff a running coldfire-mlx-server on 127.0.0.1:<port>
+    """Return True iff a running coldfire-inference-server on 127.0.0.1:<port>
     advertises hf_id in its GET /v1/models response.
 
     Comparison is against the `id` field of every entry in `data`. If

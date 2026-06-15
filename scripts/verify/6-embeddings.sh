@@ -25,7 +25,7 @@ if [ "$capability" != "embeddings" ]; then
   skip "test 6 requires an embedding server (this server: $capability, model=$model)"
   info ""
   info "launch one with:"
-  info "  coldfire-mlx-server launch --port 8081 \\"
+  info "  coldfire-inference-server launch --port 8081 \\"
   info "    --model-path nomic-ai/nomic-embed-text-v1.5 --model-type embeddings"
   info "then re-run with:"
   info "  COLDFIRE_PORT=8081 $0"

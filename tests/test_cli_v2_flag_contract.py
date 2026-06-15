@@ -2,7 +2,7 @@
 
 Verifies the surface area required by ``docs/superpowers/specs/
 2026-06-03-mlx-openai-server-fork-spec.md`` §4 — the daemon launches
-``coldfire-mlx-server`` (this CLI) with exactly the documented flags
+``coldfire-inference-server`` (this CLI) with exactly the documented flags
 and expects them to behave as specified:
 
   --host (default 127.0.0.1)
@@ -139,14 +139,14 @@ def test_licenses_finds_homebrew_layout(
 
     Mocks ``sys.prefix`` to point at a fake ``Cellar/<formula>/<ver>/libexec``
     and drops a NOTICES.txt at the canonical Homebrew location at
-    ``<formula_prefix>/share/doc/coldfire-mlx-server/``. The candidate-path
+    ``<formula_prefix>/share/doc/coldfire-inference-server/``. The candidate-path
     lookup should pick it up ahead of the source-tree fallback.
     """
     # Build the fake brew prefix tree under tmp_path.
-    fake_cellar = tmp_path / "Cellar" / "coldfire-mlx-server" / "1.8.1"
+    fake_cellar = tmp_path / "Cellar" / "coldfire-inference-server" / "1.8.1"
     fake_libexec = fake_cellar / "libexec"
     fake_libexec.mkdir(parents=True)
-    doc_dir = fake_cellar / "share" / "doc" / "coldfire-mlx-server"
+    doc_dir = fake_cellar / "share" / "doc" / "coldfire-inference-server"
     doc_dir.mkdir(parents=True)
     notices_path = doc_dir / "NOTICES.txt"
     expected_text = "FAKE BREW NOTICES — this is the bundled NOTICES.txt\n"

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# coldfire-mlx-server verification suite — entry point.
+# coldfire-inference-server verification suite — entry point.
 #
 # Modes:
 #   ./run.sh                       interactive menu
@@ -24,7 +24,7 @@ usage() {
   cat <<'USAGE'
 Usage: run.sh [--host HOST] [--port PORT] [--all | --test N] [--help]
 
-  Interactive verification suite for coldfire-mlx-server.
+  Interactive verification suite for coldfire-inference-server.
 
   Options:
     --host HOST   Override server host (default: 127.0.0.1; or $COLDFIRE_HOST)
@@ -181,7 +181,7 @@ show_menu() {
   while :; do
     printf '\n'
     printf -- '-----------------------------------------------------------\n'
-    printf '  %scoldfire-mlx-server v0.1.0 — verification suite%s\n' "$BOLD" "$RESET"
+    printf '  %scoldfire-inference-server v0.1.0 — verification suite%s\n' "$BOLD" "$RESET"
     printf -- '-----------------------------------------------------------\n'
     printf '\n'
     printf '  Detected server: %s\n' "$BASE_URL"
@@ -231,7 +231,7 @@ show_menu() {
       6)
         if [ "$capability" != "embeddings" ]; then
           skip "test 6 requires a separate embedding server (current capability: $capability)"
-          info "launch one with: coldfire-mlx-server launch --port 8081 \\"
+          info "launch one with: coldfire-inference-server launch --port 8081 \\"
           info "    --model-path nomic-ai/nomic-embed-text-v1.5 --model-type embeddings"
           info "then re-run with: COLDFIRE_PORT=8081 $0"
         else

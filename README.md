@@ -1,4 +1,4 @@
-# coldfire-mlx-server
+# coldfire-inference-server
 
 [![MIT License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://www.python.org/downloads/)
@@ -11,7 +11,7 @@ License-clean MLX-LM inference server with an OpenAI-compatible API. Fork of [`c
 
 ## Runtimes
 
-`coldfire-mlx-server` hosts multiple inference runtimes in one Python process:
+`coldfire-inference-server` hosts multiple inference runtimes in one Python process:
 
 | Runtime | `model_type` | Use case |
 |---|---|---|
@@ -19,7 +19,7 @@ License-clean MLX-LM inference server with an OpenAI-compatible API. Fork of [`c
 | BERT encoder | `embeddings` | Vector embeddings (nomic-1.5, BGE, mxbai variants) |
 | llama-cpp | `llama-cpp` | GGUF embeddings — wraps `llama-cpp-python` with Metal acceleration |
 
-The package name (`coldfire-mlx-server`) is historical from when MLX was
+The package name (`coldfire-inference-server`) is historical from when MLX was
 the only runtime; a runtime-neutral rename is tracked as a future change.
 
 ## Install
@@ -28,17 +28,17 @@ The supported install path is the Coldfire Homebrew tap:
 
 ```bash
 brew tap getcoldfire/coldfire
-brew install coldfire-mlx-server
+brew install coldfire-inference-server
 ```
 
-That installs the `coldfire-mlx-server` CLI on your `PATH` and bundles the third-party `NOTICES.txt` under `share/doc/coldfire-mlx-server/`.
+That installs the `coldfire-inference-server` CLI on your `PATH` and bundles the third-party `NOTICES.txt` under `share/doc/coldfire-inference-server/`.
 
 Source installs from this repo are supported for development; see `AGENTS.md` for the dev environment setup.
 
 ## Quickstart
 
 ```bash
-coldfire-mlx-server launch \
+coldfire-inference-server launch \
   --host 127.0.0.1 \
   --port 8080 \
   --model-path mlx-community/Llama-3.2-1B-Instruct-4bit
@@ -67,7 +67,7 @@ print(resp.choices[0].message.content)
 | `POST` | `/v1/embeddings` | OpenAI-compatible. Requires `--model-type embeddings` at launch. |
 | `GET` | `/healthz` | `200` once the model is loaded and ready; `503` during load. |
 
-Audio (transcription/TTS), image generation, and Vision-Language Model endpoints from upstream have been removed — `coldfire-mlx-server` serves chat + embeddings only.
+Audio (transcription/TTS), image generation, and Vision-Language Model endpoints from upstream have been removed — `coldfire-inference-server` serves chat + embeddings only.
 
 ## Supported embedding models
 
@@ -96,10 +96,10 @@ This package is MIT-licensed; see `LICENSE`. The dependency tree is audited at e
 To see all bundled third-party license attributions:
 
 ```bash
-coldfire-mlx-server --licenses
+coldfire-inference-server --licenses
 ```
 
-That prints the full `NOTICES.txt`. With a Homebrew install, the file also lives at `$(brew --prefix)/share/doc/coldfire-mlx-server/NOTICES.txt`.
+That prints the full `NOTICES.txt`. With a Homebrew install, the file also lives at `$(brew --prefix)/share/doc/coldfire-inference-server/NOTICES.txt`.
 
 ## Upstream relationship
 
@@ -120,5 +120,5 @@ The historical upstream relationship is documented in `UPSTREAM.md` and the top-
 | Embeddings library | `mlx-embeddings` (GPLv3) | In-tree BERT-family encoder (MIT) |
 | License surface | Mixed (transitive GPL) | MIT end-to-end; CI-gated |
 | Stream-affinity fix | Not applied | Applied (warm-up + stream wrap) |
-| Console script | `mlx-openai-server` | `coldfire-mlx-server` |
+| Console script | `mlx-openai-server` | `coldfire-inference-server` |
 | Distribution | PyPI | Homebrew tap (`getcoldfire/coldfire`) |

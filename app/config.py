@@ -174,7 +174,7 @@ class MLXServerConfig:
         """Wrap this single-model config in a one-entry ``MultiModelServerConfig``.
 
         Used by :mod:`app.cli` when ``--no-isolate`` is not set (the default),
-        so ``coldfire-mlx-server launch --model-path ...`` goes through the
+        so ``coldfire-inference-server launch --model-path ...`` goes through the
         ``HandlerProcessProxy`` path — the same subprocess isolation that
         multi-handler YAML mode uses to avoid the MLX Metal command-buffer
         races and ``resource_tracker`` semaphore leaks documented in

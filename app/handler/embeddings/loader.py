@@ -189,7 +189,7 @@ def _validate_config(cfg: dict[str, Any], model_id: str) -> None:
             f"Cannot load embedding model {model_id!r}. "
             f"Reason: hidden_act={act!r} is not supported. "
             f"Supported activations: {sorted(SUPPORTED_ACTIVATIONS)}. "
-            f"Please file an issue at https://github.com/getcoldfire/mlx-openai-server."
+            f"Please file an issue at https://github.com/getcoldfire/inference-server."
         )
     pos = cfg.get("position_embedding_type", "absolute")
     if pos not in SUPPORTED_POSITION_EMBEDDINGS:
