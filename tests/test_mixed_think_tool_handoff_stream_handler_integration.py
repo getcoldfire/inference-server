@@ -6,6 +6,7 @@ import asyncio
 import importlib
 import json
 import sys
+import threading
 import types
 import unittest
 from collections.abc import AsyncIterator
@@ -78,6 +79,10 @@ class _FakeNonStreamResponse:
 class _FakeModel:
     """Tiny model stub used by ``generate_text_stream``."""
 
+    has_draft_model = False
+    cache_is_batchable = False
+    cache_is_trimmable = True  # skip checkpoint logic in the non-batched path
+
     def create_input_prompt(self, messages: list[dict[str, str]], kwargs: dict[str, object]) -> str:
         return "prompt"
 
@@ -94,7 +99,7 @@ class _FakePromptCache:
     def __init__(self) -> None:
         self.inserted_keys: list[list[int]] = []
 
-    def fetch_nearest_cache(self, input_ids: list[int]) -> tuple[None, list[int]]:
+    def fetch_nearest_cache(self, input_ids: list[int], *, allowed_sources=None) -> tuple[None, list[int]]:
         return None, input_ids
 
     def insert_cache(self, cache_key: list[int], cache: object) -> None:
@@ -125,6 +130,21 @@ class _FakeInferenceWorker:
         return self._non_stream_response
 
 
+def _configure_handler_stubs(handler: object) -> None:
+    """Add the minimal handler-instance attributes that production ``__init__``
+    sets but ``object.__new__`` skips.
+
+    Tests that use ``object.__new__(handler_cls)`` to bypass ``__init__`` must
+    call this helper after setting the basic attrs so the non-batched inference
+    path (``_generation_lock``) and the batching guard (``_batch_scheduler``)
+    are available without starting a real scheduler.
+    """
+    handler._generation_lock = threading.RLock()  # type: ignore[attr-defined]
+    handler._batch_scheduler = None  # type: ignore[attr-defined]
+    handler._batch_scheduler_lock = asyncio.Lock()  # type: ignore[attr-defined]
+    handler._disable_batching = False  # type: ignore[attr-defined]
+
+
 class MixedThinkToolHandoffStreamHandlerIntegrationTests(unittest.TestCase):
     """Exercise mixed-think streaming parser composition through handler loop."""
 
@@ -142,6 +162,7 @@ class MixedThinkToolHandoffStreamHandlerIntegrationTests(unittest.TestCase):
         handler.tool_parser_name = "step_35"
         handler.model = _FakeModel()
         handler.prompt_cache = _FakePromptCache()
+        _configure_handler_stubs(handler)
         handler.inference_worker = _FakeInferenceWorker(
             [
                 _FakeStreamChunk("<thinking>before ", token=101),
@@ -198,6 +219,7 @@ class MixedThinkToolHandoffStreamHandlerIntegrationTests(unittest.TestCase):
         handler.tool_parser_name = "step_35"
         handler.model = _FakeModel()
         handler.prompt_cache = _FakePromptCache()
+        _configure_handler_stubs(handler)
         handler.inference_worker = _FakeInferenceWorker(
             [
                 _FakeStreamChunk("<thinking>tail-check:", token=201),
@@ -261,6 +283,7 @@ class MixedThinkToolHandoffStreamHandlerIntegrationTests(unittest.TestCase):
         handler.tool_parser_name = "step_35"
         handler.model = _FakeModel()
         handler.prompt_cache = _FakePromptCache()
+        _configure_handler_stubs(handler)
         handler.inference_worker = _FakeInferenceWorker(
             non_stream_response=_FakeNonStreamResponse(
                 text=(
@@ -322,6 +345,7 @@ class MixedThinkToolHandoffStreamHandlerIntegrationTests(unittest.TestCase):
         handler.tool_parser_name = "hermes"
         handler.model = _FakeModel()
         handler.prompt_cache = _FakePromptCache()
+        _configure_handler_stubs(handler)
         handler.inference_worker = _FakeInferenceWorker(
             non_stream_response=_FakeNonStreamResponse(
                 text=(
@@ -368,6 +392,7 @@ class MixedThinkToolHandoffStreamHandlerIntegrationTests(unittest.TestCase):
         handler.tool_parser_name = "step_35"
         handler.model = _FakeModel()
         handler.prompt_cache = _FakePromptCache()
+        _configure_handler_stubs(handler)
         handler.inference_worker = _FakeInferenceWorker(
             [
                 _FakeStreamChunk("</think>\nprefix text before tool.\n", token=301),
@@ -422,6 +447,7 @@ class MixedThinkToolHandoffStreamHandlerIntegrationTests(unittest.TestCase):
         handler.tool_parser_name = "step_35"
         handler.model = _FakeModel()
         handler.prompt_cache = _FakePromptCache()
+        _configure_handler_stubs(handler)
         handler.inference_worker = _FakeInferenceWorker(
             [
                 _FakeStreamChunk("I should inspect both handlers first.\n", token=351),
@@ -481,6 +507,7 @@ class MixedThinkToolHandoffStreamHandlerIntegrationTests(unittest.TestCase):
         handler.tool_parser_name = "step_35"
         handler.model = _FakeModel()
         handler.prompt_cache = _FakePromptCache()
+        _configure_handler_stubs(handler)
         handler.inference_worker = _FakeInferenceWorker(
             non_stream_response=_FakeNonStreamResponse(
                 text=(
@@ -537,6 +564,7 @@ class MixedThinkToolHandoffStreamHandlerIntegrationTests(unittest.TestCase):
         handler.tool_parser_name = "step_35"
         handler.model = _FakeModel()
         handler.prompt_cache = _FakePromptCache()
+        _configure_handler_stubs(handler)
         handler.inference_worker = _FakeInferenceWorker(
             [
                 _FakeStreamChunk("I should inspect both handlers first.\n", token=371),
@@ -587,6 +615,7 @@ class MixedThinkToolHandoffStreamHandlerIntegrationTests(unittest.TestCase):
         handler.tool_parser_name = "step_35"
         handler.model = _FakeModel()
         handler.prompt_cache = _FakePromptCache()
+        _configure_handler_stubs(handler)
         handler.inference_worker = _FakeInferenceWorker(
             [
                 _FakeStreamChunk(
@@ -646,6 +675,7 @@ class MixedThinkToolHandoffStreamHandlerIntegrationTests(unittest.TestCase):
         handler.tool_parser_name = "step_35"
         handler.model = _FakeModel()
         handler.prompt_cache = _FakePromptCache()
+        _configure_handler_stubs(handler)
         handler.inference_worker = _FakeInferenceWorker(
             [
                 _FakeStreamChunk("prefix text.<too", token=501),

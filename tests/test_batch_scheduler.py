@@ -499,7 +499,7 @@ async def test_admission_reclaims_lru_based_on_live_batch(patched_scheduler):
         max_bytes = 1_000
         trim_calls: list[int] = []
 
-        def fetch_nearest_cache(self, _tokens):
+        def fetch_nearest_cache(self, _tokens, *, allowed_sources=None):
             return None, list(_tokens)
 
         def trim_to(self, *, n_bytes):
@@ -581,7 +581,7 @@ async def test_exact_cache_hit_is_backed_off_before_kickoff_token(patched_schedu
             self.nbytes = nbytes
 
     class _FakeLRU:
-        def fetch_nearest_cache(self, tokens):
+        def fetch_nearest_cache(self, tokens, *, allowed_sources=None):
             if tokens == [1, 2, 3]:
                 return [_FakeLayer()], []
             raise AssertionError(f"unexpected fetch for tokens={tokens}")
@@ -632,7 +632,7 @@ async def test_exact_non_trimmable_cache_hit_falls_back_to_reprefill(patched_sch
         nbytes = 0
 
     class _FakeLRU:
-        def fetch_nearest_cache(self, tokens):
+        def fetch_nearest_cache(self, tokens, *, allowed_sources=None):
             if tokens == [1, 2, 3]:
                 return [_FakeLayer()], []
             if tokens == [1, 2]:
@@ -667,6 +667,9 @@ async def test_exact_non_trimmable_cache_hit_falls_back_to_reprefill(patched_sch
     assert chunks[-1].cached_prompt_tokens == 0
 
 
+
+
+
 @pytest.mark.asyncio
 async def test_exact_non_trimmable_cache_hit_logs_info(patched_scheduler):
     """Discarded exact hits should be logged so latency regressions are visible."""
@@ -686,7 +689,7 @@ async def test_exact_non_trimmable_cache_hit_logs_info(patched_scheduler):
         nbytes = 0
 
     class _FakeLRU:
-        def fetch_nearest_cache(self, tokens):
+        def fetch_nearest_cache(self, tokens, *, allowed_sources=None):
             if tokens == [1, 2, 3]:
                 return [_FakeLayer()], []
             if tokens == [1, 2]:
