@@ -44,13 +44,15 @@ jobs:
       - name: Create venv and install (runtime + dev)
         run: |
           python -m venv .venv
-          .venv/bin/pip install --upgrade pip
+          # ``pip install --group`` (PEP 735 dependency-groups) requires
+          # pip >= 25.1. Pin explicitly so a future runner image that
+          # ships an older pip doesn't break this step silently.
+          .venv/bin/pip install --upgrade 'pip>=25.1'
           .venv/bin/pip install -r requirements.lock
           # Dev deps (pytest, ruff, mypy, pip-licenses, ...) live in PEP
           # 735 [dependency-groups].dev in pyproject.toml — invisible to
           # pip-compile / requirements.lock. Install them explicitly so
           # `make lint`, `make test`, and `make license-check` work.
-          # Requires pip >= 25.1.
           .venv/bin/pip install --group dev
           # Editable install so mypy can resolve the package.
           .venv/bin/pip install -e . --no-deps

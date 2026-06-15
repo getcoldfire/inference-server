@@ -17,6 +17,7 @@ from dataclasses import dataclass
 
 import mlx.core as mx
 import numpy as np
+from loguru import logger
 
 from app.handler.embeddings.loader import load_embedding_model
 from app.handler.embeddings.pooling import apply_pooling, l2_normalize
@@ -81,11 +82,22 @@ class EmbeddingService:
             # Encode the simplest possible non-empty input. ``"a"`` works for
             # every tokenizer we ship with; the result is discarded.
             self.embed(["a"])
-        except Exception:  # noqa: BLE001 — best-effort warm-up; surface later
+        except Exception as e:  # noqa: BLE001 — best-effort warm-up; surface later
             # If warm-up fails the model is broken anyway; let the first real
             # ``embed(...)`` call surface the same exception with the same
             # traceback (which is more useful than a sanitized warm-up error).
-            pass
+            # Log a one-line breadcrumb so the cause isn't completely silent —
+            # if the first real embed call ALSO fails with the same error the
+            # log makes the connection obvious; if it succeeds the warning is
+            # transient. Originally this was bare ``pass`` which silently
+            # masked load-time bugs (e.g. wrong remap key on a new model
+            # variant). We still don't re-raise — the documented contract is
+            # that the first real call surfaces the canonical traceback.
+            logger.warning(
+                "embedding warm-up call failed (will retry on first real embed): {}: {}",
+                type(e).__name__,
+                e,
+            )
 
     def embed(self, inputs: list[str], dimensions: int | None = None) -> EmbeddingResult:
         """Embed a batch of input strings.
