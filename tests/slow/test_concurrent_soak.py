@@ -20,12 +20,78 @@ Never runs in CI. Invoked via ``make test-soak``.
 from __future__ import annotations
 
 import asyncio
+import json
 import time
 
 import httpx
 import pytest
 
 from tests.integration.conftest import CHAT_MODEL_ID, requires_apple_silicon
+
+
+def _join_sse_content(lines: list[str]) -> str:
+    """Concatenate ``delta.content`` across SSE chunks.
+
+    Each ``data: { ... }`` line carries a single token in
+    ``choices[0].delta.content``. The marker we look for ("MARKERnZZZ")
+    is several tokens long, so it's split across chunks like ``MARK``,
+    ``ER``, ``0``, ``ZZ``, ``Z``. A naive ``text += line`` concatenation
+    interleaves the JSON envelope between every token, which means
+    ``own_marker in text`` cannot ever match — that was the pre-existing
+    bug this test had at fork point (UPSTREAM.md soak-never-run).
+
+    Parse each line and pull out the content. Skip the terminal
+    ``data: [DONE]`` sentinel.
+    """
+    out: list[str] = []
+    for raw in lines:
+        if not raw.startswith("data:"):
+            continue
+        payload = raw[len("data:") :].strip()
+        if not payload or payload == "[DONE]":
+            continue
+        try:
+            obj = json.loads(payload)
+        except json.JSONDecodeError:
+            continue
+        choices = obj.get("choices") or []
+        if not choices:
+            continue
+        delta = choices[0].get("delta") or {}
+        content = delta.get("content")
+        if content:
+            out.append(content)
+    return "".join(out)
+
+
+def test_join_sse_content_concatenates_delta_content() -> None:
+    """Regression for the 'MARKER never matches' bug: each ``data:`` line
+    has its own JSON envelope; the helper must pull only the
+    ``choices[0].delta.content`` payload so the marker reassembles."""
+    lines = [
+        # role-header chunk (no content)
+        'data: {"choices":[{"delta":{"role":"assistant"},"index":0}]}',
+        "",
+        # content chunks — marker split across three tokens
+        'data: {"choices":[{"delta":{"content":"MARK"},"index":0}]}',
+        'data: {"choices":[{"delta":{"content":"ER0"},"index":0}]}',
+        'data: {"choices":[{"delta":{"content":"ZZZ"},"index":0}]}',
+        # finalizer — content=null
+        'data: {"choices":[{"delta":{},"index":0,"finish_reason":"stop"}]}',
+        "data: [DONE]",
+    ]
+    assert _join_sse_content(lines) == "MARKER0ZZZ"
+
+
+def test_join_sse_content_handles_malformed_lines() -> None:
+    """Malformed JSON lines must not break the test mid-soak — skip them."""
+    lines = [
+        'data: {"choices":[{"delta":{"content":"hello"}}]}',
+        "data: {malformed",
+        "data: ",  # empty payload
+        'data: {"choices":[{"delta":{"content":" world"}}]}',
+    ]
+    assert _join_sse_content(lines) == "hello world"
 
 
 @requires_apple_silicon
@@ -49,7 +115,7 @@ async def test_8_concurrent_streams_15_minutes(
         foreign_markers = [m for m in markers if m != own_marker]
         async with httpx.AsyncClient(timeout=120.0) as c:
             while time.monotonic() < end_at:
-                text = ""
+                raw_lines: list[str] = []
                 async with c.stream(
                     "POST",
                     f"{base_url}/v1/chat/completions",
@@ -67,15 +133,17 @@ async def test_8_concurrent_streams_15_minutes(
                 ) as r:
                     assert r.status_code == 200, f"stream {idx} got status {r.status_code}"
                     async for line in r.aiter_lines():
-                        if line.startswith("data:"):
-                            text += line
-                # Own marker must appear
-                if own_marker not in text:
-                    contamination_events.append((own_marker, "missing-own", text[:200]))
-                # No foreign marker may appear
+                        raw_lines.append(line)
+                # Join only the delta.content payloads, not the raw JSON
+                # envelope — otherwise the marker breaks across chunks
+                # (e.g. ``MARK``, ``ER``, ``0``) and ``in text`` never
+                # matches.
+                content = _join_sse_content(raw_lines)
+                if own_marker not in content:
+                    contamination_events.append((own_marker, "missing-own", content[:200]))
                 for foreign in foreign_markers:
-                    if foreign in text:
-                        contamination_events.append((own_marker, f"leaked:{foreign}", text[:200]))
+                    if foreign in content:
+                        contamination_events.append((own_marker, f"leaked:{foreign}", content[:200]))
                 completed_counts[idx] += 1
 
     await asyncio.gather(*[stream_loop(i) for i in range(n_streams)])
