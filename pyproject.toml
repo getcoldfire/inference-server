@@ -1,6 +1,6 @@
 [project]
 name = "coldfire-inference-server"
-version = "0.4.4"
+version = "0.4.5"
 description = "A high-performance API server that provides OpenAI-compatible endpoints for MLX models."
 readme = "README.md"
 requires-python = ">=3.11,<3.13"
