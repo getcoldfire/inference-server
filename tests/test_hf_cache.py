@@ -193,3 +193,52 @@ def test_is_loadable_detects_gguf_in_snapshot_without_suffix(tmp_path):
     repo.repo_id = namespace
     repo.repo_path = repo_dir
     assert is_loadable(repo) is True
+
+
+def test_cache_path_for_missing_hub_dir_returns_none(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Regression: on a fresh machine where ~/.cache/huggingface/hub
+    doesn't exist, cache_path_for() must NOT raise CacheNotFound — it
+    should auto-create the directory and return None (no cached repos).
+
+    Pre-fix this raised `huggingface_hub.errors.CacheNotFound`, which
+    surfaced as `coldfire-ctl models pull` exit 1 on the first
+    invocation of a new node, blocking the install flow.
+    """
+    from huggingface_hub import scan_cache_dir as real_scan
+
+    fake_cache = tmp_path / ".cache" / "huggingface" / "hub"
+    assert not fake_cache.exists()
+    monkeypatch.setattr("app.utils.hf_cache.HF_HUB_CACHE", str(fake_cache))
+    # huggingface_hub.scan_cache_dir() resolves its cache_dir from a
+    # constant captured at import time, so monkeypatching our module's
+    # binding doesn't redirect the real scan. Wrap it with an explicit
+    # cache_dir so the test sees an empty repo set instead of the
+    # operator's actual cache.
+    monkeypatch.setattr(
+        "app.utils.hf_cache.scan_cache_dir",
+        lambda: real_scan(cache_dir=str(fake_cache)),
+    )
+    assert cache_path_for("mlx-community/Qwen3-4B-4bit") is None
+    assert fake_cache.is_dir(), "_ensure_hub_dir should have created the cache directory"
+
+
+def test_list_cached_models_missing_hub_dir_returns_empty(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Same regression as test_cache_path_for_missing_hub_dir_returns_none,
+    but for the list path which is also gated by scan_cache_dir().
+    """
+    from huggingface_hub import scan_cache_dir as real_scan
+
+    fake_cache = tmp_path / ".cache" / "huggingface" / "hub"
+    monkeypatch.setattr("app.utils.hf_cache.HF_HUB_CACHE", str(fake_cache))
+    monkeypatch.setattr(
+        "app.utils.hf_cache.scan_cache_dir",
+        lambda: real_scan(cache_dir=str(fake_cache)),
+    )
+    assert list_cached_models() == []
+    assert fake_cache.is_dir()

@@ -30,6 +30,21 @@ from pathlib import Path
 from typing import Any
 
 from huggingface_hub import scan_cache_dir
+from huggingface_hub.constants import HF_HUB_CACHE
+
+
+def _ensure_hub_dir() -> None:
+    """Pre-create ~/.cache/huggingface/hub (or whatever HF_HUB_CACHE points
+    to) before any scan_cache_dir() call.
+
+    On a fresh machine where the HF cache has never been written to,
+    scan_cache_dir() raises CacheNotFound — which used to surface as
+    `coldfire-ctl models pull` failing on the first invocation of a new
+    node, blocking the install flow. The directory is trivially benign
+    to create; doing it lazily here lets list/pull/rm just work without
+    forcing the operator to mkdir up front.
+    """
+    Path(HF_HUB_CACHE).mkdir(parents=True, exist_ok=True)
 
 # Files in mlx_lm.models that ship utility code (no `class Model`) — exclude
 # from the discovered model_type set so we don't false-positive a repo whose
@@ -118,6 +133,7 @@ def list_cached_models(loadable_only: bool = True) -> list[CachedModel]:
     When loadable_only is True (default), filters to repos that pass
     is_loadable(). Set False to see every cached repo regardless.
     """
+    _ensure_hub_dir()
     info = scan_cache_dir()
     out: list[CachedModel] = []
     for repo in info.repos:
@@ -147,6 +163,7 @@ def cache_path_for(hf_id: str) -> Path | None:
     Uses scan_cache_dir's repo_id field to avoid hand-rolling the name
     translation (HF cache uses `models--<org>--<repo>`).
     """
+    _ensure_hub_dir()
     info = scan_cache_dir()
     for repo in info.repos:
         if repo.repo_type == "model" and repo.repo_id == hf_id:
