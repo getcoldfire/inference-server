@@ -19,7 +19,12 @@ import click
 from huggingface_hub import snapshot_download
 from huggingface_hub.errors import HfHubHTTPError, RepositoryNotFoundError
 
-from app.utils.hf_cache import MLX_SUPPORTED_MODEL_TYPES, cache_path_for, list_cached_models
+from app.utils.hf_cache import (
+    BERT_ENCODER_MODEL_TYPES,
+    MLX_LM_MODEL_TYPES,
+    cache_path_for,
+    list_cached_models,
+)
 from app.utils.server_probe import is_model_serving, serving_model_ids
 
 
@@ -101,7 +106,7 @@ def models_list(show_all: bool, as_json: bool, port: int) -> None:
     show '-' for the cache row even when that model is being served
     under the alias — the cache name and the alias are different strings.
     """
-    rows = list_cached_models(mlx_only=not show_all)
+    rows = list_cached_models(loadable_only=not show_all)
     # Single probe for STATUS — fetch /v1/models once, check each row
     # against the returned set. Avoids N * 500ms wait for empty caches.
     served = serving_model_ids(port=port)
@@ -113,7 +118,7 @@ def models_list(show_all: bool, as_json: bool, port: int) -> None:
                 "name": r.name,
                 "size_bytes": r.size_bytes,
                 "last_used": r.last_used.isoformat() if r.last_used else None,
-                "is_mlx": r.is_mlx,
+                "is_loadable": r.is_loadable,
                 "serving": serving,
             }
             for r, serving in annotated
@@ -144,17 +149,24 @@ _DEFAULT_PULL_PATTERNS: tuple[str, ...] = (
 )
 
 
-def _looks_mlx_from_hub(hf_id: str) -> bool:
-    """Best-effort pre-download MLX-shape check via the Hub's config.json.
+def _looks_loadable_from_hub(hf_id: str) -> bool:
+    """Best-effort pre-download loadability check via the Hub's config.json.
 
     Used by `models pull` to decide whether to warn. Skipped when the
     repo is already fully cached locally (we'd be doing a redundant
-    HEAD/etag round-trip; the cached `is_mlx_shaped` is just as good).
+    HEAD/etag round-trip; the cached `is_loadable` is just as good).
+
+    Returns True for any namespace / suffix / model_type that one of our
+    handlers (MLX-LM, llama-cpp, BERT-encoder) supports — mirroring the
+    post-download `is_loadable` heuristic but operating on the remote
+    config rather than a local snapshot.
 
     Falls back to True (skip warning) on any error so we don't block
     legitimate downloads when the Hub is briefly unreachable.
     """
     if hf_id.startswith("mlx-community/"):
+        return True
+    if hf_id.lower().endswith("-gguf"):
         return True
     try:
         from huggingface_hub import hf_hub_download
@@ -166,7 +178,8 @@ def _looks_mlx_from_hub(hf_id: str) -> bool:
         return True  # be charitable on error — let download proceed
     if "quantization" in cfg:
         return True
-    return cfg.get("model_type", "") in MLX_SUPPORTED_MODEL_TYPES
+    model_type = cfg.get("model_type", "")
+    return model_type in MLX_LM_MODEL_TYPES or model_type in BERT_ENCODER_MODEL_TYPES
 
 
 @models.command("pull")
@@ -210,14 +223,16 @@ def models_pull(hf_id: str, quiet: bool, include: tuple[str, ...], exclude: tupl
     # weren't MLX-shaped they would have seen the warning on first pull.
     already_cached = cache_path_for(hf_id) is not None
     if already_cached:
-        is_mlx = True  # don't warn redundantly
+        looks_loadable = True  # don't warn redundantly
     else:
-        is_mlx = _looks_mlx_from_hub(hf_id)
+        looks_loadable = _looks_loadable_from_hub(hf_id)
 
-    if not is_mlx:
+    if not looks_loadable:
         click.echo(
-            f"⚠ {hf_id} doesn't look MLX-quantized — coldfire-inference-server "
-            f"will fail to load it. Consider mlx-community/* alternatives.",
+            f"⚠ {hf_id} doesn't look loadable by any handler (MLX-LM, "
+            f"llama-cpp, or BERT-encoder) — coldfire-inference-server "
+            f"will fail to load it. Consider mlx-community/* or *-GGUF "
+            f"alternatives.",
             err=True,
         )
 
@@ -239,9 +254,9 @@ def models_pull(hf_id: str, quiet: bool, include: tuple[str, ...], exclude: tupl
 
     if not quiet:
         click.echo(f"✓ {hf_id} cached at {path}")
-    if not is_mlx:
+    if not looks_loadable:
         click.echo(
-            "⚠ Reminder: this repo is not MLX-quantized; `models install` of this id will fail.",
+            "⚠ Reminder: this repo doesn't look loadable; `models install` of this id will fail.",
             err=True,
         )
 
@@ -254,7 +269,7 @@ def _lookup_size_bytes(hf_id: str) -> int:
     `Path.is_file(follow_symlinks=)` we'd otherwise want for HF's
     blob-symlinks layout). The list is typically <100 entries.
     """
-    for row in list_cached_models(mlx_only=False):
+    for row in list_cached_models(loadable_only=False):
         if row.name == hf_id:
             return row.size_bytes
     return 0

@@ -4,10 +4,13 @@ Tests monkey-patch huggingface_hub.scan_cache_dir to return a fake
 HFCacheInfo built from a tmp_path tree. This keeps tests deterministic
 and avoids hitting real HF Hub or the operator's actual cache.
 
-MLX heuristic: a cached repo is MLX-shaped if any of:
-  (1) namespace matches mlx-community/* (always treat as MLX)
-  (2) config.json declares a "quantization" key
-  (3) config.json's "model_type" is in MLX_SUPPORTED_MODEL_TYPES
+Loadability heuristic (matches is_loadable in app/utils/hf_cache.py):
+  (1) namespace matches mlx-community/*  (MLX-LM)
+  (2) repo ID ends in -GGUF (case-insensitive)  (llama-cpp)
+  (3) snapshot contains a .gguf file  (llama-cpp)
+  (4) config.json has a "quantization" key  (MLX-LM)
+  (5) config.json model_type in MLX_LM_MODEL_TYPES  (MLX-LM)
+  (6) config.json model_type in BERT_ENCODER_MODEL_TYPES  (BERT)
 """
 
 from __future__ import annotations
@@ -22,7 +25,7 @@ import pytest
 
 from app.utils.hf_cache import (
     cache_path_for,
-    is_mlx_shaped,
+    is_loadable,
     list_cached_models,
 )
 
@@ -95,27 +98,34 @@ def fake_cache(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     return tmp_path
 
 
-def test_list_cached_models_default_filters_to_mlx(fake_cache):
-    """mlx_only=True (default) drops the non-MLX bert repo."""
+def test_list_cached_models_default_filters_to_loadable(fake_cache):
+    """loadable_only=True (default) keeps every handler-loadable repo.
+
+    The fixture's three repos all happen to be loadable now: MLX namespace,
+    qwen2 model_type (MLX-LM), and bert model_type (BERT encoder). To prove
+    the filter still does something, the fixture is extended (below) by
+    individual tests when they need a genuinely-non-loadable repo.
+    """
     rows = list_cached_models()
     names = {r.name for r in rows}
     assert "mlx-community/Llama-3.2-1B-Instruct-4bit" in names
-    assert "Qwen/Qwen2.5-7B-Instruct" in names  # model_type "qwen2" passes
-    assert "sentence-transformers/all-MiniLM-L6-v2" not in names
+    assert "Qwen/Qwen2.5-7B-Instruct" in names  # model_type qwen2 (MLX-LM)
+    # BERT model_type now passes (covered by the BERT encoder handler).
+    assert "sentence-transformers/all-MiniLM-L6-v2" in names
 
 
-def test_list_cached_models_all_includes_non_mlx(fake_cache):
-    """mlx_only=False returns everything."""
-    rows = list_cached_models(mlx_only=False)
+def test_list_cached_models_all_includes_non_loadable(fake_cache):
+    """loadable_only=False returns everything."""
+    rows = list_cached_models(loadable_only=False)
     assert len(rows) == 3
 
 
 def test_list_cached_models_fields(fake_cache):
-    rows = sorted(list_cached_models(mlx_only=False), key=lambda r: r.name)
+    rows = sorted(list_cached_models(loadable_only=False), key=lambda r: r.name)
     qwen = next(r for r in rows if r.name == "Qwen/Qwen2.5-7B-Instruct")
     assert qwen.size_bytes == 4_400_000_000
     assert qwen.last_used.year == 2026 and qwen.last_used.month == 6
-    assert qwen.is_mlx is True
+    assert qwen.is_loadable is True
     assert qwen.path.name == "models--Qwen--Qwen2.5-7B-Instruct"
 
 
@@ -134,44 +144,52 @@ def test_cache_path_for_missing(fake_cache):
     [
         ({"model_type": "llama"}, "mlx-community/Foo", True),  # namespace forces MLX
         ({"model_type": "llama", "quantization": {}}, "Org/Foo", True),  # quantization key
-        ({"model_type": "qwen2"}, "Org/Foo", True),  # supported model_type
+        ({"model_type": "qwen2"}, "Org/Foo", True),  # MLX-LM model_type
         ({"model_type": "phi3"}, "Org/Foo", True),
-        ({"model_type": "bert"}, "Org/Foo", False),  # unknown model_type
+        # BERT-encoder model_types are loadable since v0.4.3.
+        ({"model_type": "bert"}, "Org/Foo", True),
+        ({"model_type": "nomic_bert"}, "nomic-ai/nomic-embed-text-v1.5", True),
+        ({"model_type": "mpnet"}, "Org/Foo", True),
+        ({"model_type": "roberta"}, "Org/Foo", True),
+        # Architectures no handler supports remain non-loadable.
         ({"model_type": "t5"}, "Org/Foo", False),
+        ({"model_type": "vit"}, "Org/Foo", False),
         ({}, "Org/Foo", False),  # no model_type, no namespace
         (None, "mlx-community/Foo", True),  # no config but mlx ns
-        # GGUF / llama-cpp paths: namespace suffix wins regardless of config.
+        # GGUF / llama-cpp: namespace suffix wins regardless of config.
         (None, "nomic-ai/nomic-embed-text-v1.5-GGUF", True),
         (None, "Qwen/Qwen3-Embedding-4B-gguf", True),  # case-insensitive suffix
-        ({"model_type": "bert"}, "Some/Org-GGUF", True),  # suffix overrides unknown model_type
+        ({"model_type": "t5"}, "Some/Org-GGUF", True),  # suffix overrides non-loadable model_type
     ],
 )
-def test_is_mlx_shaped(config, namespace, expected, tmp_path, monkeypatch: pytest.MonkeyPatch):
-    # Pin the supported-types set so tests don't depend on what mlx_lm
-    # happens to ship on the machine running this suite.
+def test_is_loadable(config, namespace, expected, tmp_path, monkeypatch: pytest.MonkeyPatch):
+    # Pin the MLX-LM set so tests don't depend on what mlx_lm happens to
+    # ship on the runner. BERT_ENCODER_MODEL_TYPES is hand-curated and
+    # doesn't need pinning.
     monkeypatch.setattr(
-        "app.utils.hf_cache.MLX_SUPPORTED_MODEL_TYPES",
+        "app.utils.hf_cache.MLX_LM_MODEL_TYPES",
         frozenset({"llama", "qwen2", "phi3", "mistral", "gemma2"}),
     )
     repo_dir = _make_repo(tmp_path, namespace, config)
     repo = MagicMock()
     repo.repo_id = namespace
     repo.repo_path = repo_dir
-    assert is_mlx_shaped(repo) is expected
+    assert is_loadable(repo) is expected
 
 
-def test_is_mlx_shaped_detects_gguf_in_snapshot_without_suffix(tmp_path):
+def test_is_loadable_detects_gguf_in_snapshot_without_suffix(tmp_path):
     """A non-suffixed repo whose snapshot ships a .gguf file should still
     be flagged loadable — covers manual pulls into oddly-named repos."""
-    # Build a repo whose ID does NOT end in -GGUF and whose config is unknown,
-    # so neither the namespace nor model_type rule applies. Drop a .gguf file
-    # into the snapshot and expect the .gguf scan to flip the verdict.
+    # Build a repo whose ID doesn't end in -GGUF and whose config is t5
+    # (no handler covers it), so neither the namespace nor model_type
+    # rule applies. Drop a .gguf file into the snapshot and expect the
+    # .gguf scan to flip the verdict.
     namespace = "operator/local-conversion"
-    repo_dir = _make_repo(tmp_path, namespace, {"model_type": "bert"})
+    repo_dir = _make_repo(tmp_path, namespace, {"model_type": "t5"})
     snap = next((repo_dir / "snapshots").iterdir())
     (snap / "weights.q4_K_M.gguf").write_bytes(b"\x00" * 16)
 
     repo = MagicMock()
     repo.repo_id = namespace
     repo.repo_path = repo_dir
-    assert is_mlx_shaped(repo) is True
+    assert is_loadable(repo) is True
