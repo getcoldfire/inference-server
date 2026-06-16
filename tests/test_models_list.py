@@ -22,14 +22,14 @@ def fake_rows():
             name="mlx-community/Llama-3.2-1B-Instruct-4bit",
             size_bytes=712_000_000,
             last_used=now - timedelta(days=3),
-            is_mlx=True,
+            is_loadable=True,
             path=Path("/fake/llama"),
         ),
         CachedModel(
             name="mlx-community/Qwen2.5-7B-Instruct-4bit",
             size_bytes=4_400_000_000,
             last_used=now - timedelta(hours=1),
-            is_mlx=True,
+            is_loadable=True,
             path=Path("/fake/qwen"),
         ),
     ]
@@ -76,20 +76,20 @@ def test_list_json_shape(fake_rows):
     assert len(payload) == 2
     qwen = next(p for p in payload if p["name"].endswith("Qwen2.5-7B-Instruct-4bit"))
     assert qwen["size_bytes"] == 4_400_000_000
-    assert qwen["is_mlx"] is True
+    assert qwen["is_loadable"] is True
     assert qwen["serving"] is False
     assert "last_used" in qwen  # ISO-8601 string or None
 
 
 def test_list_all_flag_passes_through():
-    """--all calls list_cached_models(mlx_only=False)."""
+    """--all calls list_cached_models(loadable_only=False)."""
     with (
         patch("app.cli_models.list_cached_models", return_value=[]) as m,
         patch("app.cli_models.serving_model_ids", return_value=set()),
     ):
         result = CliRunner().invoke(cli, ["models", "list", "--all"])
     assert result.exit_code == 0
-    m.assert_called_once_with(mlx_only=False)
+    m.assert_called_once_with(loadable_only=False)
 
 
 def test_list_empty_cache():

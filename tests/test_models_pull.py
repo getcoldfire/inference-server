@@ -27,7 +27,7 @@ def test_pull_default_allowlist():
     with (
         patch("app.cli_models.snapshot_download", side_effect=cap),
         patch("app.cli_models.cache_path_for", return_value=None),
-        patch("app.cli_models._looks_mlx_from_hub", return_value=True),
+        patch("app.cli_models._looks_loadable_from_hub", return_value=True),
     ):
         result = CliRunner().invoke(cli, ["models", "pull", "mlx-community/Foo-4bit"])
     assert result.exit_code == 0, result.output
@@ -50,7 +50,7 @@ def test_pull_include_extends_allowlist():
     with (
         patch("app.cli_models.snapshot_download", side_effect=cap),
         patch("app.cli_models.cache_path_for", return_value=None),
-        patch("app.cli_models._looks_mlx_from_hub", return_value=True),
+        patch("app.cli_models._looks_loadable_from_hub", return_value=True),
     ):
         result = CliRunner().invoke(
             cli, ["models", "pull", "mlx-community/Foo-4bit", "--include", "*.jinja", "--include", "*.gguf"]
@@ -71,7 +71,7 @@ def test_pull_exclude_removes_from_allowlist():
     with (
         patch("app.cli_models.snapshot_download", side_effect=cap),
         patch("app.cli_models.cache_path_for", return_value=None),
-        patch("app.cli_models._looks_mlx_from_hub", return_value=True),
+        patch("app.cli_models._looks_loadable_from_hub", return_value=True),
     ):
         result = CliRunner().invoke(cli, ["models", "pull", "mlx-community/Foo-4bit", "--exclude", "*.txt"])
     assert result.exit_code == 0
@@ -84,13 +84,13 @@ def test_pull_non_mlx_warns_but_continues():
     with (
         patch("app.cli_models.snapshot_download", side_effect=_fake_download),
         patch("app.cli_models.cache_path_for", return_value=None),
-        patch("app.cli_models._looks_mlx_from_hub", return_value=False),
+        patch("app.cli_models._looks_loadable_from_hub", return_value=False),
     ):
         result = CliRunner().invoke(cli, ["models", "pull", "microsoft/Phi-3"])
     assert result.exit_code == 0, result.output
     # Warning appears at start AND at end — lowercase substring match
     text = result.output.lower()
-    assert "doesn't look mlx" in text or "not mlx-quantized" in text or "non-mlx" in text
+    assert "doesn't look loadable" in text
     # Success line still printed (we're not quiet)
     assert "cached" in text
 
@@ -102,7 +102,7 @@ def test_pull_quiet_suppresses_progress_banners(monkeypatch):
     with (
         patch("app.cli_models.snapshot_download", side_effect=_fake_download),
         patch("app.cli_models.cache_path_for", return_value=None),
-        patch("app.cli_models._looks_mlx_from_hub", return_value=True),
+        patch("app.cli_models._looks_loadable_from_hub", return_value=True),
     ):
         result = CliRunner().invoke(cli, ["models", "pull", "mlx-community/Foo-4bit", "--quiet"])
     assert result.exit_code == 0
@@ -115,7 +115,7 @@ def test_pull_quiet_suppresses_progress_banners(monkeypatch):
 
 
 def test_pull_already_cached_skips_hub_preflight():
-    """If cache_path_for returns a path, _looks_mlx_from_hub is NOT called
+    """If cache_path_for returns a path, _looks_loadable_from_hub is NOT called
     (no extra HF round-trip on already-cached repos)."""
     preflight_calls = []
 
@@ -126,11 +126,11 @@ def test_pull_already_cached_skips_hub_preflight():
     with (
         patch("app.cli_models.snapshot_download", side_effect=_fake_download),
         patch("app.cli_models.cache_path_for", return_value=Path("/fake/cached")),
-        patch("app.cli_models._looks_mlx_from_hub", side_effect=boom),
+        patch("app.cli_models._looks_loadable_from_hub", side_effect=boom),
     ):
         result = CliRunner().invoke(cli, ["models", "pull", "mlx-community/Foo-4bit"])
     assert result.exit_code == 0
-    assert preflight_calls == [], "_looks_mlx_from_hub should NOT have been called"
+    assert preflight_calls == [], "_looks_loadable_from_hub should NOT have been called"
 
 
 def test_pull_propagates_hub_error():
@@ -153,7 +153,7 @@ def test_pull_propagates_hub_error():
     with (
         patch("app.cli_models.snapshot_download", side_effect=boom),
         patch("app.cli_models.cache_path_for", return_value=None),
-        patch("app.cli_models._looks_mlx_from_hub", return_value=True),
+        patch("app.cli_models._looks_loadable_from_hub", return_value=True),
     ):
         result = CliRunner().invoke(cli, ["models", "pull", "bad/id"])
     assert result.exit_code == 1

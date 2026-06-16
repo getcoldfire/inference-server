@@ -2,17 +2,21 @@
 
 All three exported helpers operate on the local cache (no network):
 
-  list_cached_models(mlx_only=True)  -> list[CachedModel]
-  cache_path_for(hf_id)              -> Path | None
-  is_mlx_shaped(repo_info)           -> bool
+  list_cached_models(loadable_only=True)  -> list[CachedModel]
+  cache_path_for(hf_id)                   -> Path | None
+  is_loadable(repo_info)                  -> bool
 
 Built on huggingface_hub.scan_cache_dir() so we don't hand-roll the
-`models--<org>--<repo>` ↔ `<hf-id>` translation. The MLX heuristic
-(spec §6.2) decides what counts as MLX for the default `list` filter:
+`models--<org>--<repo>` ↔ `<hf-id>` translation. The loadability
+heuristic decides what counts as servable by any of our handlers for
+the default `list` filter:
 
-  1. Namespace `mlx-community/*` is always MLX.
-  2. config.json with a "quantization" key is MLX.
-  3. config.json `model_type` in MLX_SUPPORTED_MODEL_TYPES is MLX.
+  1. Namespace `mlx-community/*` (MLX-LM handler).
+  2. Repo ID ending in `-GGUF` (case-insensitive) — llama-cpp handler.
+  3. Any cached snapshot contains a `*.gguf` file — llama-cpp handler.
+  4. config.json with a "quantization" key — MLX-LM handler.
+  5. config.json `model_type` in MLX_LM_MODEL_TYPES — MLX-LM handler.
+  6. config.json `model_type` in BERT_ENCODER_MODEL_TYPES — BERT handler.
 
 `--all` on the `list` command bypasses the heuristic.
 """
@@ -76,7 +80,24 @@ def _discover_mlx_model_types() -> frozenset[str]:
         return frozenset()
 
 
-MLX_SUPPORTED_MODEL_TYPES: frozenset[str] = _discover_mlx_model_types()
+MLX_LM_MODEL_TYPES: frozenset[str] = _discover_mlx_model_types()
+
+# BERT-encoder handler accepts BERT-family architectures regardless of
+# explicit model_type, but cache-scan time we only have config.json. The
+# common encoder model_type strings that the handler can load with its
+# vanilla / RoPE / SwiGLU variants. Hand-curated rather than discovered
+# because the handler is shape-driven (loader.py: SUPPORTED_ACTIVATIONS,
+# SUPPORTED_POSITION_EMBEDDINGS), so there's no registry to scan.
+# Extending this set is cheap if a new encoder family lands.
+BERT_ENCODER_MODEL_TYPES: frozenset[str] = frozenset(
+    {
+        "bert",
+        "nomic_bert",
+        "mpnet",
+        "roberta",
+        "xlm-roberta",
+    }
+)
 
 
 @dataclass
@@ -87,23 +108,23 @@ class CachedModel:
     size_bytes: int  # Total bytes on disk (HF's size_on_disk)
     last_used: datetime | None  # huggingface_hub's last_accessed (lib-internal,
     # NOT filesystem atime). None if not tracked yet.
-    is_mlx: bool  # Passes the MLX heuristic
+    is_loadable: bool  # Passes the loadability heuristic (any handler can load it)
     path: Path  # Cache directory path
 
 
-def list_cached_models(mlx_only: bool = True) -> list[CachedModel]:
+def list_cached_models(loadable_only: bool = True) -> list[CachedModel]:
     """Return a list of CachedModel for every repo in the HF cache.
 
-    When mlx_only is True (default), filters to repos that pass
-    is_mlx_shaped(). Set False to see every cached repo regardless.
+    When loadable_only is True (default), filters to repos that pass
+    is_loadable(). Set False to see every cached repo regardless.
     """
     info = scan_cache_dir()
     out: list[CachedModel] = []
     for repo in info.repos:
         if repo.repo_type != "model":
             continue
-        is_mlx = is_mlx_shaped(repo)
-        if mlx_only and not is_mlx:
+        loadable = is_loadable(repo)
+        if loadable_only and not loadable:
             continue
         last_used: datetime | None = None
         if repo.last_accessed is not None:
@@ -113,7 +134,7 @@ def list_cached_models(mlx_only: bool = True) -> list[CachedModel]:
                 name=repo.repo_id,
                 size_bytes=int(repo.size_on_disk),
                 last_used=last_used,
-                is_mlx=is_mlx,
+                is_loadable=loadable,
                 path=Path(repo.repo_path),
             )
         )
@@ -133,24 +154,20 @@ def cache_path_for(hf_id: str) -> Path | None:
     return None
 
 
-def is_mlx_shaped(repo: Any) -> bool:
-    """Heuristic for whether a cached repo can be loaded by this server.
-
-    The name predates the v0.3.0 llama-cpp handler; the function now
-    answers "loadable by any of our handlers" (MLX-LM, BERT-encoder,
-    or llama-cpp), not just MLX-LM. Renaming is deferred to avoid
-    churning callers that read the ``is_mlx`` field on CachedRepo.
+def is_loadable(repo: Any) -> bool:
+    """Whether a cached repo can be loaded by any of this server's handlers
+    (MLX-LM, BERT-encoder, or llama-cpp).
 
     Signals (any one is sufficient):
-      1. Namespace matches ``mlx-community/*`` — covers older
-         mlx-community repos that may not declare quantization metadata.
-      2. Repo ID ends with ``-GGUF`` (case-insensitive) — convention for
-         llama-cpp / llama.cpp-quantized weights; matches the cli-v2
-         classifier in ``mlxBackendModelType``.
-      3. Any cached snapshot contains a ``*.gguf`` file — catches GGUFs
-         in non-suffixed repos (rare but legitimate).
-      4. config.json contains a ``"quantization"`` key — MLX-style.
-      5. config.json ``model_type`` is in MLX_SUPPORTED_MODEL_TYPES.
+      1. Namespace matches ``mlx-community/*`` — MLX-LM handler.
+      2. Repo ID ends with ``-GGUF`` (case-insensitive) — llama-cpp;
+         matches the cli-v2 classifier in ``mlxBackendModelType``.
+      3. Any cached snapshot contains a ``*.gguf`` file — llama-cpp,
+         catches GGUFs in non-suffixed repos (rare but legitimate).
+      4. config.json contains a ``"quantization"`` key — MLX-LM.
+      5. config.json ``model_type`` is in MLX_LM_MODEL_TYPES — MLX-LM.
+      6. config.json ``model_type`` is in BERT_ENCODER_MODEL_TYPES —
+         BERT-encoder handler (vanilla / RoPE / SwiGLU variants).
     """
     repo_id = getattr(repo, "repo_id", "") or ""
     if repo_id.startswith("mlx-community/"):
@@ -166,12 +183,12 @@ def is_mlx_shaped(repo: Any) -> bool:
     if "quantization" in config:
         return True
     model_type = config.get("model_type", "")
-    return model_type in MLX_SUPPORTED_MODEL_TYPES
+    return model_type in MLX_LM_MODEL_TYPES or model_type in BERT_ENCODER_MODEL_TYPES
 
 
 def _snapshot_has_gguf(repo: Any) -> bool:
     """Return True iff the repo's most-recent snapshot contains any
-    ``*.gguf`` file. Used by is_mlx_shaped to flag GGUF repos that
+    ``*.gguf`` file. Used by is_loadable to flag GGUF repos that
     don't follow the ``-GGUF`` suffix convention.
     """
     repo_path = getattr(repo, "repo_path", None)
