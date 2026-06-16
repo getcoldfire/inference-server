@@ -140,6 +140,10 @@ def test_cache_path_for_missing(fake_cache):
         ({"model_type": "t5"}, "Org/Foo", False),
         ({}, "Org/Foo", False),  # no model_type, no namespace
         (None, "mlx-community/Foo", True),  # no config but mlx ns
+        # GGUF / llama-cpp paths: namespace suffix wins regardless of config.
+        (None, "nomic-ai/nomic-embed-text-v1.5-GGUF", True),
+        (None, "Qwen/Qwen3-Embedding-4B-gguf", True),  # case-insensitive suffix
+        ({"model_type": "bert"}, "Some/Org-GGUF", True),  # suffix overrides unknown model_type
     ],
 )
 def test_is_mlx_shaped(config, namespace, expected, tmp_path, monkeypatch: pytest.MonkeyPatch):
@@ -154,3 +158,20 @@ def test_is_mlx_shaped(config, namespace, expected, tmp_path, monkeypatch: pytes
     repo.repo_id = namespace
     repo.repo_path = repo_dir
     assert is_mlx_shaped(repo) is expected
+
+
+def test_is_mlx_shaped_detects_gguf_in_snapshot_without_suffix(tmp_path):
+    """A non-suffixed repo whose snapshot ships a .gguf file should still
+    be flagged loadable — covers manual pulls into oddly-named repos."""
+    # Build a repo whose ID does NOT end in -GGUF and whose config is unknown,
+    # so neither the namespace nor model_type rule applies. Drop a .gguf file
+    # into the snapshot and expect the .gguf scan to flip the verdict.
+    namespace = "operator/local-conversion"
+    repo_dir = _make_repo(tmp_path, namespace, {"model_type": "bert"})
+    snap = next((repo_dir / "snapshots").iterdir())
+    (snap / "weights.q4_K_M.gguf").write_bytes(b"\x00" * 16)
+
+    repo = MagicMock()
+    repo.repo_id = namespace
+    repo.repo_path = repo_dir
+    assert is_mlx_shaped(repo) is True
