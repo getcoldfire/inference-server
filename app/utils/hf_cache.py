@@ -134,17 +134,30 @@ def cache_path_for(hf_id: str) -> Path | None:
 
 
 def is_mlx_shaped(repo: Any) -> bool:
-    """Heuristic for whether a cached repo is MLX-loadable.
+    """Heuristic for whether a cached repo can be loaded by this server.
 
-    Three signals (any one is sufficient):
-      1. Namespace matches `mlx-community/*` — always treat as MLX
-         (covers older mlx-community repos that may not declare
-         quantization metadata).
-      2. config.json contains a "quantization" key — MLX-style.
-      3. config.json `model_type` is in MLX_SUPPORTED_MODEL_TYPES.
+    The name predates the v0.3.0 llama-cpp handler; the function now
+    answers "loadable by any of our handlers" (MLX-LM, BERT-encoder,
+    or llama-cpp), not just MLX-LM. Renaming is deferred to avoid
+    churning callers that read the ``is_mlx`` field on CachedRepo.
+
+    Signals (any one is sufficient):
+      1. Namespace matches ``mlx-community/*`` — covers older
+         mlx-community repos that may not declare quantization metadata.
+      2. Repo ID ends with ``-GGUF`` (case-insensitive) — convention for
+         llama-cpp / llama.cpp-quantized weights; matches the cli-v2
+         classifier in ``mlxBackendModelType``.
+      3. Any cached snapshot contains a ``*.gguf`` file — catches GGUFs
+         in non-suffixed repos (rare but legitimate).
+      4. config.json contains a ``"quantization"`` key — MLX-style.
+      5. config.json ``model_type`` is in MLX_SUPPORTED_MODEL_TYPES.
     """
     repo_id = getattr(repo, "repo_id", "") or ""
     if repo_id.startswith("mlx-community/"):
+        return True
+    if repo_id.lower().endswith("-gguf"):
+        return True
+    if _snapshot_has_gguf(repo):
         return True
 
     config = _read_config(repo)
@@ -154,6 +167,36 @@ def is_mlx_shaped(repo: Any) -> bool:
         return True
     model_type = config.get("model_type", "")
     return model_type in MLX_SUPPORTED_MODEL_TYPES
+
+
+def _snapshot_has_gguf(repo: Any) -> bool:
+    """Return True iff the repo's most-recent snapshot contains any
+    ``*.gguf`` file. Used by is_mlx_shaped to flag GGUF repos that
+    don't follow the ``-GGUF`` suffix convention.
+    """
+    repo_path = getattr(repo, "repo_path", None)
+    if repo_path is None:
+        return False
+    snapshots_dir = Path(repo_path) / "snapshots"
+    if not snapshots_dir.is_dir():
+        return False
+    try:
+        snaps = sorted(
+            snapshots_dir.iterdir(),
+            key=lambda p: p.stat().st_mtime,
+            reverse=True,
+        )
+    except OSError:
+        return False
+    for snap in snaps:
+        try:
+            for entry in snap.iterdir():
+                if entry.name.lower().endswith(".gguf"):
+                    return True
+        except OSError:
+            continue
+        return False  # Only inspect the most-recent snapshot.
+    return False
 
 
 def _read_config(repo: Any) -> dict[str, Any] | None:
