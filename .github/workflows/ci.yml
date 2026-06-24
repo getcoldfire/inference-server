@@ -24,7 +24,7 @@ jobs:
   apple-silicon:
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
@@ -34,7 +34,7 @@ jobs:
       # Key includes the model IDs we expect to pull so a config change
       # forces a fresh cache.
       - name: Cache HuggingFace models
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: ~/.cache/huggingface
           key: hf-${{ runner.os }}-llama32-1b-4bit-nomic-v15
@@ -89,7 +89,7 @@ jobs:
 #  lint-and-test:
 #    runs-on: ubuntu-latest
 #    steps:
-#      - uses: actions/checkout@v6
+#      - uses: actions/checkout@v7
 #      - uses: actions/setup-python@v6
 #        with:
 #          python-version: '3.12'
