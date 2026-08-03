@@ -52,6 +52,8 @@ from ..schemas.openai import (
 
 if TYPE_CHECKING:
     from ..handler.mlx_lm import MLXLMHandler
+from app.version import __version__
+
 from ..utils.debug_logging import log_debug_server_request
 from ..utils.errors import create_error_response
 
@@ -371,6 +373,16 @@ async def health(raw_request: Request) -> HealthCheckResponse | JSONResponse:
     model_id = getattr(handler, "model_path", "unknown")
 
     return HealthCheckResponse(status=HealthCheckStatus.OK, model_id=model_id, model_status="initialized")
+
+
+@router.get("/version", response_model=None)
+async def version() -> dict:
+    """Report the running package version.
+
+    Unauthenticated and stateless (touches no ``app.state``), mirroring the
+    ``/health``/``/healthz`` routes above.
+    """
+    return {"version": __version__}
 
 
 @router.get("/v1/models", response_model=None)

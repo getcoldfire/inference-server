@@ -18,7 +18,11 @@ from __future__ import annotations
 import tomllib
 from pathlib import Path
 
-from app.version import PACKAGE_NAME
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
+
+from app.api.endpoints import router
+from app.version import PACKAGE_NAME, __version__
 
 
 def _pyproject_project() -> dict:
@@ -29,3 +33,22 @@ def _pyproject_project() -> dict:
 
 def test_package_name_matches_pyproject_project_name() -> None:
     assert PACKAGE_NAME == _pyproject_project()["name"]
+
+
+# ---------------------------------------------------------------------------
+# GET /version endpoint (mirrors tests/test_healthz.py's minimal-app style)
+# ---------------------------------------------------------------------------
+
+
+def _make_app() -> FastAPI:
+    """Build a minimal FastAPI app with the production router mounted."""
+    app = FastAPI()
+    app.include_router(router)
+    return app
+
+
+def test_version_endpoint_reports_package_version():
+    r = TestClient(_make_app()).get("/version")
+    assert r.status_code == 200
+    assert r.json() == {"version": __version__}
+    assert __version__  # non-empty
