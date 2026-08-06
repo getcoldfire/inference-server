@@ -89,7 +89,13 @@ class JsonObjectToolParser(AbstractToolParser):
         if not isinstance(data, dict):
             return None
         name = data.get("name")
+        # Llama 3.x names the payload "parameters" where Qwen names it "arguments"
+        # (verified: mlx-community/Llama-3.2-3B-Instruct-4bit emits
+        # {"name": "create_rule", "parameters": {...}}). Accept either, and always
+        # emit OpenAI's "arguments". "arguments" wins if a model somehow sends both.
         arguments = data.get("arguments")
+        if arguments is None:
+            arguments = data.get("parameters")
         if not isinstance(name, str) or not name:
             return None
         if not isinstance(arguments, dict):

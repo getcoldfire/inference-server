@@ -153,3 +153,24 @@ def test_get_tool_open_and_close_are_empty():
     result = p.extract_tool_calls('{"name": "f", "arguments": {}}')
     assert result["tool_calls"]
     assert isinstance(result["content"], str)
+
+
+def test_accepts_llama_style_parameters_key():
+    """Llama 3.x emits `parameters` where Qwen emits `arguments`. Verified on
+    mlx-community/Llama-3.2-3B-Instruct-4bit, which returned
+    {"name": "create_rule", "parameters": {"name": "bob@x.com -> Junk"}} and was
+    rejected by the original arguments-only shape check."""
+    got = calls('{"name": "create_rule", "parameters": {"name": "bob@x.com -> Junk"}}')
+    assert len(got) == 1
+    assert got[0]["name"] == "create_rule"
+    # normalised onto OpenAI's spelling on the way out
+    assert json.loads(got[0]["arguments"]) == {"name": "bob@x.com -> Junk"}
+
+
+def test_arguments_wins_when_a_model_sends_both():
+    got = calls('{"name": "f", "arguments": {"a": 1}, "parameters": {"b": 2}}')
+    assert json.loads(got[0]["arguments"]) == {"a": 1}
+
+
+def test_parameters_must_still_be_an_object():
+    assert calls('{"name": "f", "parameters": "not an object"}') is None
