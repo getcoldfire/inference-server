@@ -17,6 +17,7 @@ from .gemma4 import Gemma4ReasoningParser, Gemma4ToolParser
 from .glm4_moe import GLM4MoEReasoningParser, GLM4MoEToolParser
 from .harmony import HarmonyParser
 from .hermes import HermesReasoningParser, HermesToolParser
+from .json_object import JsonObjectToolParser
 from .kimi_k2 import KimiK2ToolParser
 from .longcat_flash_lite import LongCatFlashLiteToolParser
 from .minimax_m2 import MiniMaxM2ToolParser
@@ -61,6 +62,7 @@ TOOL_PARSER_MAP: dict[str, type[AbstractToolParser]] = {
     "longcat_flash_lite": LongCatFlashLiteToolParser,
     "kimi_k2": KimiK2ToolParser,
     "step_35": FunctionParameterToolParser,  # use FunctionParameterToolParser for Step 35
+    "json": JsonObjectToolParser,  # permissive bare-JSON parser; reaches Qwen2.5/Llama-style output
 }
 
 # Unified parsers that handle BOTH reasoning and tool calls in one class
@@ -322,6 +324,7 @@ __all__ = [
     "SolarOpenToolParser",
     "LongCatFlashLiteToolParser",
     "KimiK2ToolParser",
+    "JsonObjectToolParser",
     # Unified parsers
     "HarmonyParser",
     # Mappings and helper functions

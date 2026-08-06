@@ -46,6 +46,30 @@ def _coerce_cached_tokens(ctx_cached: int, source: Any) -> int:
     return max(ctx_cached, batched)
 
 
+def _gate_tool_parser_on_tools(parsers_result: Any, request: Any) -> None:
+    """Disable a tool parser that requires ``tools`` when the request sent none.
+
+    Most tool parsers key off a wire-format delimiter (``<tool_call>`` and
+    friends), so a model answering in plain content simply never emits that
+    delimiter and nothing is misparsed. The bare-JSON parser
+    (``app/parsers/json_object.py``) has no such delimiter -- it decides
+    purely from shape -- so it must never run against a response to a
+    request that didn't offer any tools, or a model legitimately answering a
+    question with a JSON object gets misread as a function call.
+
+    Parsers opt into this gate via a ``requires_tools = True`` class
+    attribute (currently only ``JsonObjectToolParser``); every other parser
+    is unaffected regardless of whether the request sent tools.
+    """
+    tool_parser = parsers_result.tool_parser
+    if tool_parser is None:
+        return
+    if not getattr(tool_parser, "requires_tools", False):
+        return
+    if not getattr(request, "tools", None):
+        parsers_result.tool_parser = None
+
+
 def _strip_complete_tool_blocks(text: str, tool_open: str, tool_close: str) -> str:
     """Remove fully formed tool-call blocks while preserving surrounding literal text.
 
@@ -479,6 +503,7 @@ class MLXLMHandler:
                 reasoning_parser_name=self.reasoning_parser_name,
                 tool_parser_name=self.tool_parser_name,
             )
+            _gate_tool_parser_on_tools(parsers_result, request)
             enable_thinking = chat_template_kwargs.get("enable_thinking", True)
             if not enable_thinking and parsers_result.reasoning_parser:
                 if parsers_result.reasoning_parser.respects_enable_thinking():
@@ -597,6 +622,7 @@ class MLXLMHandler:
             reasoning_parser_name=self.reasoning_parser_name,
             tool_parser_name=self.tool_parser_name,
         )
+        _gate_tool_parser_on_tools(parsers_result, request)
 
         if not enable_thinking and parsers_result.reasoning_parser:
             if parsers_result.reasoning_parser.respects_enable_thinking():
