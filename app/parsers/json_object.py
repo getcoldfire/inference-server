@@ -123,21 +123,43 @@ class JsonObjectToolParser(AbstractToolParser):
         # would spin forever. Setting content="" here keeps that path dead.
         return {"tool_calls": [call], "content": ""}
 
+    @staticmethod
+    def _looks_like_json_start(buffer: str) -> bool:
+        """Return True only when ``buffer`` has committed to a JSON object.
+
+        Deliberately narrow: a lone backtick or two is ordinary inline-code
+        markdown ("`create_rule` is the tool..."), not evidence of an
+        incoming ```` ```json ```` fence, so it must never trigger buffering
+        on its own. Only a direct ``{`` or a *complete* triple-backtick
+        fence opener counts.
+        """
+        stripped = buffer.lstrip()
+        if not stripped:
+            return False
+        return stripped[0] == "{" or stripped.startswith("```")
+
     def extract_tool_calls_streaming(self, chunk: str) -> tuple[dict | str | None, bool]:
         """Extract tool calls from streaming chunks.
 
-        With no delimiter to key on, this buffers everything that could
-        still become a tool call and only reports once the buffer resolves
-        one way or the other:
+        With no delimiter to key on, this buffers only text that has
+        actually committed to looking like JSON (see
+        ``_looks_like_json_start``) and only reports once the buffer
+        resolves one way or the other:
 
-        * Buffer content whose first non-whitespace character is ``{`` or a
-          fence backtick is held back until it parses as complete JSON
+        * Buffer content that starts with ``{`` or a complete ```` ``` ````
+          fence opener is held back until it parses as complete JSON
           (matching the strict call shape or not) -- reporting a half
           received object as a call would be wrong, and reporting a
           half-received object as plain content would truncate it.
         * Anything else is passed through immediately: it can never resolve
           to a JSON object, so there is no reason to withhold it from the
           stream.
+
+        If the buffered text never resolves (the model never closes the
+        object, or valid JSON is followed by trailing prose so the whole
+        buffer never parses cleanly), the caller must call
+        ``flush_streaming`` once the underlying stream ends so that text is
+        still delivered as content instead of silently dropped.
 
         Parameters
         ----------
@@ -155,8 +177,7 @@ class JsonObjectToolParser(AbstractToolParser):
         """
         self.buffer += chunk
 
-        looks_like_json = bool(self.buffer.strip()) and self.buffer.strip()[0] in "{`"
-        if not looks_like_json:
+        if not self._looks_like_json_start(self.buffer):
             passthrough = self.buffer
             self.buffer = ""
             self.state = ToolParserState.NORMAL
@@ -175,6 +196,10 @@ class JsonObjectToolParser(AbstractToolParser):
         # invalid JSON/shape. Only resolve the "complete but not a call"
         # case once the buffer itself parses as valid JSON -- otherwise we
         # cannot distinguish "not done yet" from "never going to match".
+        # Text like `{"answer": 42}\n\nmore prose` never parses cleanly (the
+        # trailing prose makes it invalid JSON as a whole) and stays
+        # buffered here indefinitely -- ``flush_streaming`` is what recovers
+        # it once the stream ends.
         try:
             json.loads(candidate)
         except (json.JSONDecodeError, ValueError):
@@ -185,3 +210,34 @@ class JsonObjectToolParser(AbstractToolParser):
         self.buffer = ""
         self.state = ToolParserState.NORMAL
         return {"content": content}, True
+
+    def flush_streaming(self) -> dict[str, str] | None:
+        """Return any text still buffered when the underlying stream ends.
+
+        ``extract_tool_calls_streaming`` can end a stream mid-buffer: the
+        model may never close the JSON object, or may emit valid JSON
+        followed by trailing prose that never parses as a whole. Neither
+        case is a completed marker the way ``</tool_call>`` is for the
+        delimited parsers, so nothing inside ``extract_tool_calls_streaming``
+        itself can resolve it -- there is no next chunk to wait for.
+
+        The handler (``app/handler/mlx_lm.py``) calls this once, after its
+        response stream ends, for any tool parser that defines it -- which
+        today is only this one, since every delimited parser resolves (or
+        definitively fails to resolve) a block within
+        ``extract_tool_calls_streaming`` itself. Returning the raw buffer as
+        content here is what keeps a never-closed or trailing-prose object
+        from vanishing instead of reaching the caller.
+
+        Returns
+        -------
+        dict[str, str] | None
+            ``{"content": <buffered text>}`` if anything was buffered,
+            otherwise None.
+        """
+        if not self.buffer:
+            return None
+        leftover = self.buffer
+        self.buffer = ""
+        self.state = ToolParserState.NORMAL
+        return {"content": leftover}

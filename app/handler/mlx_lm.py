@@ -1030,6 +1030,21 @@ class MLXLMHandler:
 
                         yield text
 
+            # A separate (non-unified) tool parser may still be holding buffered
+            # text when the response stream ends -- the delimited parsers always
+            # resolve a block from inside extract_tool_calls_streaming itself
+            # (</tool_call> either shows up or the response is simply over with
+            # no open block), but a delimiter-less parser like the bare-JSON one
+            # can end mid-buffer (no closing marker to wait for, or valid JSON
+            # trailed by prose that never parses as a whole). Scoped to parsers
+            # that opt in via `flush_streaming` -- today only JsonObjectToolParser
+            # -- so the other fourteen tool parsers are untouched.
+            end_of_stream_tool_parser = parsers_result.tool_parser
+            if end_of_stream_tool_parser is not None and hasattr(end_of_stream_tool_parser, "flush_streaming"):
+                leftover = end_of_stream_tool_parser.flush_streaming()
+                if leftover:
+                    yield leftover
+
             total_tokens = total_input_tokens + final_chunk.generation_tokens
             if self.debug:
                 self.prompt_cache.log_cache_stats()

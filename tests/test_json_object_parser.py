@@ -67,6 +67,77 @@ def test_streaming_passes_prose_straight_through():
     assert payload == {"content": "Sure, I can help with that."}
 
 
+def test_streaming_flushes_unresolved_buffer_at_end_of_stream():
+    """Fix round 1: a buffer that never resolves (model never closes the
+    object) must not vanish -- flush_streaming recovers it as content.
+    """
+    p = JsonObjectToolParser()
+    partial, done = p.extract_tool_calls_streaming('{"name": "f", "argum')
+    assert not done
+    leftover = p.flush_streaming()
+    assert leftover == {"content": '{"name": "f", "argum'}
+    # The buffer is now empty; a second flush has nothing left to report.
+    assert p.flush_streaming() is None
+
+
+def test_streaming_valid_json_followed_by_trailing_prose_ends_up_as_content():
+    """Fix round 1: `{"answer": 42}\\n\\nmore prose` never parses as a whole
+    (the trailing prose makes it invalid JSON), so it stays buffered through
+    extract_tool_calls_streaming -- flush_streaming must still deliver it as
+    content instead of dropping it, and it must never be reported as a call.
+    """
+    p = JsonObjectToolParser()
+    text = '{"answer": 42}\n\nLet me know if you need anything else.'
+    payload, done = p.extract_tool_calls_streaming(text)
+    assert not done
+    assert payload is None
+    leftover = p.flush_streaming()
+    assert leftover == {"content": text}
+
+
+def test_streaming_leading_backtick_is_never_buffered_as_candidate_json():
+    """Fix round 1: inline-code markdown ("`create_rule` is the tool...")
+    starts with a single backtick, which must not trigger JSON buffering --
+    only `{` or a *complete* triple-backtick fence opener should.
+    """
+    p = JsonObjectToolParser()
+    payload, done = p.extract_tool_calls_streaming("`create_rule` is the tool you want.")
+    assert done
+    assert payload == {"content": "`create_rule` is the tool you want."}
+    # Nothing should be sitting in the buffer afterward.
+    assert p.flush_streaming() is None
+
+
+def test_streaming_double_backtick_is_also_not_buffered():
+    """Two backticks (still short of a real ``` fence opener) must pass through too."""
+    p = JsonObjectToolParser()
+    payload, done = p.extract_tool_calls_streaming("``not a fence``")
+    assert done
+    assert payload == {"content": "``not a fence``"}
+
+
+def test_streaming_genuine_complete_tool_call_still_parses():
+    """Regression: an ordinary, unfenced, single-chunk tool call must still parse."""
+    p = JsonObjectToolParser()
+    payload, done = p.extract_tool_calls_streaming('{"name": "create_rule", "arguments": {"name": "Junk bob"}}')
+    assert done
+    assert payload["tool_calls"][0]["name"] == "create_rule"
+    assert json.loads(payload["tool_calls"][0]["arguments"]) == {"name": "Junk bob"}
+    # Fully resolved -- nothing left to flush.
+    assert p.flush_streaming() is None
+
+
+def test_streaming_fenced_tool_call_across_chunks_still_parses():
+    """Regression: a complete ```json fence (all three backticks present in one
+    chunk) followed by the object across later chunks should still resolve."""
+    p = JsonObjectToolParser()
+    p.extract_tool_calls_streaming('```json\n{"name": "f", "argum')
+    payload, done = p.extract_tool_calls_streaming('ents": {"a": 1}}\n```')
+    assert done
+    assert payload["tool_calls"][0]["name"] == "f"
+    assert json.loads(payload["tool_calls"][0]["arguments"]) == {"a": 1}
+
+
 def test_get_tool_open_and_close_are_empty():
     """No delimiter exists for this format; the handler relies on this being ''
     (see app/handler/mlx_lm.py:_strip_complete_tool_blocks -- empty markers must
