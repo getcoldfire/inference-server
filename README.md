@@ -58,6 +58,110 @@ resp = client.chat.completions.create(
 print(resp.choices[0].message.content)
 ```
 
+## Serving several models at once (agent setups)
+
+A single `launch` serves one model. To keep more than one model available —
+e.g. a fast MoE for bulk work and a denser model for a quality pass — use
+multi-handler mode: one process, one port, each model addressed by its
+`served_model_name` alias.
+
+```yaml
+# agent.yaml
+server:
+  host: "127.0.0.1"
+  port: 8084
+  log_level: INFO
+
+models:
+  - model_path: mlx-community/Qwen3.5-35B-A3B-4bit
+    model_type: lm
+    served_model_name: fast          # alias used in the API "model" field
+    context_length: 32768
+    reasoning_parser: qwen3_5
+    enable_auto_tool_choice: true
+    tool_call_parser: qwen3_coder
+
+  - model_path: mlx-community/Qwen3.8-27B-4bit
+    model_type: lm
+    served_model_name: quality
+    context_length: 32768
+    reasoning_parser: qwen3_5
+    enable_auto_tool_choice: true
+    tool_call_parser: qwen3_coder
+```
+
+```bash
+coldfire-inference-server launch --config agent.yaml
+```
+
+Both models then appear in `GET /v1/models` as `fast` and `quality`, and a
+client picks one per request:
+
+```python
+client.chat.completions.create(model="fast", messages=[...])
+client.chat.completions.create(model="quality", messages=[...])
+```
+
+`--model-path` and the other per-model flags are ignored when `--config` is
+supplied.
+
+> **Parser choice matters.** Qwen3.5 / Qwen3.8 emit tool calls in the
+> `<tool_call><function=name><parameter=key>value</parameter></function></tool_call>`
+> form, which is handled by `qwen3_coder` (aliased to `FunctionParameterToolParser`)
+> — *not* by `qwen3_moe`, which expects JSON inside `<tool_call>`. Pairing these
+> models with `qwen3_moe` yields `tool_calls: null` and a dropped `content`
+> field rather than a visible error. Verify a real tool call before trusting a
+> parser pairing; `TOOL_PARSER_MAP` in `app/parsers/__init__.py` lists them all.
+
+### Keeping models warm
+
+**Models stay warm by default.** Each model is loaded once at startup and held
+in memory for the life of the process — there is no idle eviction unless you
+ask for it. An agent does not need to send keep-alive traffic.
+
+`--idle-unload-seconds` (CLI) / `on_demand` (YAML) is the opt-*out*:
+
+| Setting | Behavior |
+|---|---|
+| `--idle-unload-seconds 0` (default) | Load at startup, stay resident forever. |
+| `--idle-unload-seconds N` (N > 0) | Load on first request, unload after N seconds idle. |
+| `on_demand: true` + `on_demand_idle_timeout: N` | Same, per-model, in YAML. |
+
+Use on-demand only when models would not otherwise fit in RAM together — the
+reload cost is a full load from disk on the next request.
+
+Each model runs in its own handler subprocess, so resident memory is roughly
+the sum of the quantized weights (the two models above sit at ~19 GB and
+~15 GB) plus KV cache. Set `context_length` explicitly to bound the latter;
+some models advertise a nominal maximum far larger than you want to allocate
+against.
+
+### Waiting for readiness
+
+`GET /healthz` **always returns `200` once the process is listening** — it
+reports liveness, not readiness. Do not gate on the status code: the server
+answers `200` while its models are still loading. Readiness is in the JSON
+body's `model_status` field:
+
+| `model_status` | Meaning |
+|---|---|
+| `no_models` | Registry up, zero models loaded yet |
+| `initialized (N model(s))` | Multi-handler mode, N models ready |
+| `initialized` | Single-model mode, model ready |
+| `uninitialized` | Single-model mode, handler not yet set |
+
+An agent launching the server itself should poll until the expected model
+count appears — large models take tens of seconds:
+
+```bash
+coldfire-inference-server launch --config agent.yaml &
+until curl -sf http://127.0.0.1:8084/healthz \
+      | grep -q 'initialized (2 model(s))'; do sleep 2; done
+```
+
+`GET /v1/models` is the other reliable readiness signal: it lists exactly the
+aliases that are live and serving.
+
 ## API endpoints
 
 | Method | Path | Notes |
@@ -65,7 +169,7 @@ print(resp.choices[0].message.content)
 | `POST` | `/v1/chat/completions` | OpenAI-compatible. Streaming (`stream: true`) and non-streaming. |
 | `GET` | `/v1/models` | Lists the served model(s). |
 | `POST` | `/v1/embeddings` | OpenAI-compatible. Requires `--model-type embeddings` at launch. |
-| `GET` | `/healthz` | `200` once the model is loaded and ready; `503` during load. |
+| `GET` | `/healthz` | Liveness: always `200` once listening. Readiness is the body's `model_status` field — see [Waiting for readiness](#waiting-for-readiness). |
 
 Audio (transcription/TTS), image generation, and Vision-Language Model endpoints from upstream have been removed — `coldfire-inference-server` serves chat + embeddings only.
 

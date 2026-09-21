@@ -1,28 +1,47 @@
-# Example multi-handler configuration for mlx-openai-server.
+# Example multi-handler configuration for coldfire-inference-server.
 #
 # Launch with:
-#   mlx-openai-server launch --config examples/config.yaml
+#   coldfire-inference-server launch --config examples/config.yaml
+#
+# Valid model_type values in this fork: lm | embeddings | llama-cpp
+# (audio, image-generation and VLM handlers were removed — see README).
 
 server:
-  host: "0.0.0.0"
+  host: "127.0.0.1"
   port: 8000
   log_level: INFO
   # log_file: logs/app.log     # uncomment to log to file
   # no_log_file: true           # uncomment to disable file logging
 
 models:
-  # Language model
-  - model_path: mlx-community/MiniMax-M2.5-4bit
+  # Language model — stays resident for the life of the process.
+  - model_path: mlx-community/Qwen3.5-35B-A3B-4bit
     model_type: lm
-    served_model_name: Minimax-M2.5    # optional alias (defaults to model_path)
+    served_model_name: fast              # optional alias (defaults to model_path)
+    context_length: 32768
     enable_auto_tool_choice: true
-    tool_call_parser: minimax_m2
-    reasoning_parser: minimax_m2
+    tool_call_parser: qwen3_coder
+    reasoning_parser: qwen3_5
 
-  - model_path: black-forest-labs/FLUX.2-klein-4B
-    model_type: image-generation
-    config_name: flux2-klein-4b
-    quantize: 4
-    served_model_name: flux2-klein-4b
-    on_demand: true
-    on_demand_idle_timeout: 120  # seconds before unloading (default: 60)
+  # Second language model on the same port, addressed as "quality".
+  - model_path: mlx-community/Qwen3.8-27B-4bit
+    model_type: lm
+    served_model_name: quality
+    context_length: 32768
+    enable_auto_tool_choice: true
+    tool_call_parser: qwen3_coder
+    reasoning_parser: qwen3_5
+
+  # Text embeddings via the in-tree BERT encoder.
+  - model_path: mlx-community/nomic-embed-text-v1.5
+    model_type: embeddings
+    served_model_name: embed
+
+  # Optional: load on first request, unload after 120s idle. Use only when
+  # models would not otherwise fit in RAM together — reload costs a full
+  # load from disk.
+  # - model_path: mlx-community/Qwen3-8B-4bit
+  #   model_type: lm
+  #   served_model_name: occasional
+  #   on_demand: true
+  #   on_demand_idle_timeout: 120
