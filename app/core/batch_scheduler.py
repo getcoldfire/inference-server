@@ -23,9 +23,10 @@ import inspect
 import queue
 import threading
 import time
+from collections import deque
 from collections.abc import AsyncGenerator, Callable
 from contextlib import nullcontext
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
 import mlx.core as mx
@@ -126,6 +127,12 @@ class _PendingRequest:
     segment_types: list[str] | None = None
 
 
+# How much of a long-running request's recent output the scheduler keeps
+# for its progress log.
+_RECENT_TOKENS = 16
+_RECENT_TEXT_CHARS = 200
+
+
 @dataclass
 class _ActiveRequest:
     """Per-request state tracked while the sequence is live in the batch."""
@@ -142,6 +149,14 @@ class _ActiveRequest:
     pending_segment_types: list[str]
     first_token_time: float | None = None
     generation_tokens: int = 0
+    # Progress tracking for the long-running request log: when the request
+    # was admitted and last produced a token, plus its most recent token ids
+    # and decoded text, so a stuck request shows *what* it is doing.
+    admitted_time: float = field(default_factory=time.perf_counter)
+    last_token_time: float | None = None
+    recent_tokens: deque[int] = field(default_factory=lambda: deque(maxlen=_RECENT_TOKENS))
+    recent_text: str = ""
+    last_long_running_log: float | None = None
 
 
 _STREAM_SENTINEL: Any = object()
@@ -172,6 +187,12 @@ class BatchScheduler:
     idle_poll_timeout : float, optional
         Seconds to wait for a new request when the batch is empty before
         looping again; defaults to 0.1.
+    long_running_log_after : float, optional
+        Seconds a request may run before the scheduler logs a warning
+        reporting its progress; defaults to 60.
+    long_running_log_interval : float, optional
+        Minimum seconds between repeat warnings for the same request;
+        defaults to 60.
     """
 
     def __init__(
@@ -187,6 +208,8 @@ class BatchScheduler:
         generation_lock: threading.RLock | None = None,
         queue_size: int = 100,
         idle_poll_timeout: float = 0.1,
+        long_running_log_after: float = 60.0,
+        long_running_log_interval: float = 60.0,
     ) -> None:
         self._model = model
         self._tokenizer = tokenizer
@@ -202,6 +225,8 @@ class BatchScheduler:
         self._generation_lock = generation_lock
         self._queue_size = queue_size
         self._idle_poll_timeout = idle_poll_timeout
+        self._long_running_log_after = long_running_log_after
+        self._long_running_log_interval = long_running_log_interval
 
         self._admission_queue: queue.Queue[_PendingRequest] = queue.Queue(maxsize=queue_size)
         self._batch_generator: BatchGenerator | None = None
@@ -570,6 +595,7 @@ class BatchScheduler:
                             self._handle_generation_response(resp)
 
                         self._process_cancellations()
+                        self._log_long_running(time.perf_counter())
 
                         # Keep continuous batching active while this scheduler
                         # owns the model: batchable requests may join between
@@ -861,8 +887,11 @@ class BatchScheduler:
             # Will be removed in _process_cancellations on this iteration.
             return
 
+        now = time.perf_counter()
         if state.first_token_time is None:
-            state.first_token_time = time.perf_counter()
+            state.first_token_time = now
+        state.last_token_time = now
+        state.recent_tokens.append(int(resp.token))
 
         chunk_finish = resp.finish_reason
         is_final = chunk_finish is not None
@@ -888,6 +917,8 @@ class BatchScheduler:
                     segment += state.detokenizer.last_segment
                 except Exception:  # noqa: BLE001 — finalize is best-effort
                     pass
+
+        state.recent_text = (state.recent_text + segment)[-_RECENT_TEXT_CHARS:]
 
         chunk = BatchChunk(
             text=segment,
@@ -936,6 +967,41 @@ class BatchScheduler:
             )
             self._send(state.loop, state.out_queue, _STREAM_SENTINEL)
             self._active.pop(resp.uid, None)
+
+    def _log_long_running(self, now: float) -> None:
+        """Warn about requests that have been running a long time.
+
+        Tells a request that is still generating (tokens keep arriving, and
+        the recent tokens and text show what) apart from one that has
+        stalled (no token yet, or none for a long time). Each request is
+        reported at most once per ``long_running_log_interval``.
+
+        Parameters
+        ----------
+        now : float
+            Current ``time.perf_counter()`` reading.
+        """
+        for uid, state in self._active.items():
+            age = now - state.admitted_time
+            if age < self._long_running_log_after:
+                continue
+            if (
+                state.last_long_running_log is not None
+                and now - state.last_long_running_log < self._long_running_log_interval
+            ):
+                continue
+            state.last_long_running_log = now
+            if state.last_token_time is None:
+                last_token = "no token yet"
+            else:
+                last_token = f"last token {now - state.last_token_time:.1f}s ago"
+            logger.warning(
+                f"BatchScheduler uid={uid} still running after {age:.0f}s "
+                f"(generated={state.generation_tokens}, {last_token}, "
+                f"prompt_tokens={state.prompt_tokens}, cached_prefix={state.cached_prompt_tokens}, "
+                f"active={len(self._active)}, recent_tokens={list(state.recent_tokens)}, "
+                f"recent_text={state.recent_text!r})"
+            )
 
     @staticmethod
     def _compute_tps(state: _ActiveRequest) -> float:
