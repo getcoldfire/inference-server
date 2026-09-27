@@ -152,6 +152,15 @@ async def _stream_until_cancelled(
     """
     try:
         while True:
+            # Check between chunks too: a healthy stream delivers each chunk
+            # well inside ``poll_interval``, so the timeout branch below may
+            # never run and a cancel would otherwise go unnoticed until
+            # ``max_tokens``. Closing the stream runs its cleanup, which
+            # removes the sequence from the batch.
+            if should_cancel():
+                with suppress(Exception):
+                    await stream.aclose()
+                return
             next_chunk_task = asyncio.create_task(stream.__anext__())
             while True:
                 try:
