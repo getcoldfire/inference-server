@@ -119,13 +119,11 @@ async def _resolve_handler(
     """
     registry = getattr(raw_request.app.state, "registry", None)
     if registry is not None and model_id is not None:
-        # Try the normal (already-loaded) path first
-        try:
-            return registry.get_handler(model_id)
-        except KeyError:
-            pass
-
-        # Check if this is an on-demand model that needs loading.
+        # On-demand models always go through ``ensure_on_demand_loaded``,
+        # even when already loaded: that call takes the reference that
+        # keeps the model loaded for this request and cancels any pending
+        # idle-unload timer. Taking the plain ``get_handler`` path for a
+        # loaded on-demand model let the idle timer unload it mid-request.
         #
         # Some tests (and lightweight embedding scenarios) attach a minimal
         # registry-like object that only exposes ``get_handler`` and
@@ -133,7 +131,13 @@ async def _resolve_handler(
         # so those call sites still receive the intended 404 path.
         is_on_demand = getattr(registry, "is_on_demand", None)
         ensure_on_demand_loaded = getattr(registry, "ensure_on_demand_loaded", None)
-        if callable(is_on_demand) and is_on_demand(model_id) and callable(ensure_on_demand_loaded):
+        if not (callable(is_on_demand) and is_on_demand(model_id) and callable(ensure_on_demand_loaded)):
+            # Not on-demand: use the normal (already-loaded) path
+            try:
+                return registry.get_handler(model_id)
+            except KeyError:
+                pass
+        else:
             try:
                 handler = await ensure_on_demand_loaded(model_id)
                 # Tag the request so the on-demand scope can release it
@@ -173,12 +177,68 @@ async def _resolve_handler(
 
 
 async def _release_on_demand(raw_request: Request) -> None:
-    """Release the on-demand model reference after a request completes."""
+    """Release the on-demand model reference after a request completes.
+
+    Clears the request's tag, so calling this more than once releases
+    the reference only once.
+
+    Parameters
+    ----------
+    raw_request : Request
+        The request whose on-demand reference, if any, is released.
+    """
     model_id = getattr(raw_request.state, "on_demand_model_id", None)
     if model_id is not None:
+        raw_request.state.on_demand_model_id = None
         registry = getattr(raw_request.app.state, "registry", None)
         if registry is not None:
             await registry.release_on_demand(model_id)
+
+
+def _hold_on_demand_until_streamed(
+    raw_request: Request, response: StreamingResponse | JSONResponse | Any
+) -> StreamingResponse | JSONResponse | Any:
+    """Keep a streaming response's on-demand reference until its body ends.
+
+    The route's ``finally`` runs as soon as it returns a
+    ``StreamingResponse``, before any token is generated. Releasing there
+    let the idle timer unload the model mid-stream. For a streaming
+    response this wraps the body so the reference is released when the
+    stream finishes, fails, or the client disconnects, and hands the
+    reference over from the request so the route's ``finally`` does not
+    release it early. Any other response is returned unchanged.
+
+    Parameters
+    ----------
+    raw_request : Request
+        The request that may hold an on-demand model reference.
+    response : StreamingResponse | JSONResponse | Any
+        What the route is about to return.
+
+    Returns
+    -------
+    StreamingResponse | JSONResponse | Any
+        ``response``, with its body wrapped when it is a stream.
+    """
+    model_id = getattr(raw_request.state, "on_demand_model_id", None)
+    registry = getattr(raw_request.app.state, "registry", None)
+    if not isinstance(response, StreamingResponse) or model_id is None or registry is None:
+        return response
+
+    body = response.body_iterator
+
+    async def _body_then_release() -> AsyncGenerator[Any, None]:
+        try:
+            async for chunk in body:
+                yield chunk
+        finally:
+            await registry.release_on_demand(model_id)
+
+    response.body_iterator = _body_then_release()
+    # The wrapper now owns the release; untag the request so the route's
+    # ``finally`` does not release the reference as well.
+    raw_request.state.on_demand_model_id = None
+    return response
 
 
 def _get_handler_registry_ownership(raw_request: Request, handler: Any) -> str:
@@ -624,7 +684,8 @@ async def chat_completions(
             )
 
         try:
-            return await process_text_request(handler, request, request_id, raw_request=raw_request)
+            response = await process_text_request(handler, request, request_id, raw_request=raw_request)
+            return _hold_on_demand_until_streamed(raw_request, response)
         except HTTPException:
             raise
         except Exception as e:
@@ -1966,7 +2027,8 @@ async def responses_endpoint(
             )
 
         try:
-            return await process_text_responses_request(handler, request)
+            response = await process_text_responses_request(handler, request)
+            return _hold_on_demand_until_streamed(raw_request, response)
         except HTTPException:
             raise
         except Exception as e:

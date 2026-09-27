@@ -816,6 +816,31 @@ class HandlerProcessProxy:
                 f"restarted after {self._max_restart_attempts} attempts"
             ) from last_error
 
+    def _fail_pending(self, message: str) -> None:
+        """Fail every in-flight call with a 503 and forget it.
+
+        Without this, a caller whose child process has gone away waits
+        out the full RPC timeout for a response that will never come.
+
+        Parameters
+        ----------
+        message : str
+            Error message delivered to each waiting caller.
+        """
+        for req_id, q in list(self._pending.items()):
+            if req_id == "__ready__":
+                continue
+            with suppress(Exception):
+                q.put_nowait(
+                    {
+                        "type": "error",
+                        "error_type": "RuntimeError",
+                        "message": message,
+                        "status_code": 503,
+                    }
+                )
+        self._pending.clear()
+
     async def _restart(self) -> None:
         """Tear down the old child process and spawn a fresh one.
 
@@ -837,19 +862,7 @@ class HandlerProcessProxy:
 
         # Fail any in-flight requests with an error so callers don't
         # hang forever.
-        for req_id, q in list(self._pending.items()):
-            if req_id == "__ready__":
-                continue
-            with suppress(Exception):
-                q.put_nowait(
-                    {
-                        "type": "error",
-                        "error_type": "RuntimeError",
-                        "message": "Handler process crashed; restarting",
-                        "status_code": 503,
-                    }
-                )
-        self._pending.clear()
+        self._fail_pending("Handler process crashed; restarting")
 
         # Create fresh queues (old ones may have broken pipes).
         self._request_queue = self._ctx.Queue()
@@ -1174,7 +1187,9 @@ class HandlerProcessProxy:
 
         Waits for the child to acknowledge shutdown, then joins the
         process and reader thread.  If the child does not respond
-        within 10 s it is forcefully terminated.
+        within 10 s it is forcefully terminated. Any call still waiting
+        on the child afterwards is failed with a 503 rather than left to
+        wait out the RPC timeout.
 
         Blocking ``Process.join`` calls are wrapped in
         ``asyncio.to_thread`` so that multiple proxies can be cleaned
@@ -1183,6 +1198,7 @@ class HandlerProcessProxy:
         """
         if not self._process or not self._process.is_alive():
             self._running = False
+            self._fail_pending(f"Model '{self.served_model_name}' was unloaded")
             return
 
         # -- Phase 1: Request a graceful shutdown via the IPC queue. --
@@ -1240,5 +1256,9 @@ class HandlerProcessProxy:
         # -- Phase 3: Stop the response reader thread. --
         if self._reader_thread and self._reader_thread.is_alive():
             self._reader_thread.join(timeout=2)
+
+        # Streams still open now will never receive another chunk; end
+        # them instead of leaving each to wait out the RPC timeout.
+        self._fail_pending(f"Model '{self.served_model_name}' was unloaded")
 
         logger.info(f"Handler process for '{self.served_model_name}' shut down successfully")
