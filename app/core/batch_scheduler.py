@@ -586,7 +586,9 @@ class BatchScheduler:
                             prompt_responses, gen_responses = self._batch_generator.next()
                         except Exception as exc:  # noqa: BLE001 — propagate per-request
                             logger.exception(f"BatchGenerator.next() raised: {exc!s}")
+                            failed_uids = list(self._active)
                             self._fail_all_active(exc)
+                            self._evict_from_batch(failed_uids)
                             continue
 
                         self._handle_prompt_responses(prompt_responses)
@@ -1040,6 +1042,31 @@ class BatchScheduler:
             )
             self._send(state.loop, state.out_queue, chunk)
             self._send(state.loop, state.out_queue, _STREAM_SENTINEL)
+
+    def _evict_from_batch(self, uids: list[int]) -> None:
+        """Take failed sequences out of the generator and free their buffers.
+
+        Failing a request only forgets it on the scheduler's side. Unless
+        its sequence is also removed from ``BatchGenerator``, the next
+        ``next()`` runs it again and raises the same error, and every later
+        request fails with it until the process restarts -- seen with
+        ``[metal::malloc] Resource limit (499000) exceeded``. Must run on
+        the scheduler thread inside ``mx.stream(self._stream)``, like
+        ``_process_cancellations``.
+
+        Parameters
+        ----------
+        uids : list[int]
+            Sequences to remove from the batch.
+        """
+        if not uids or self._batch_generator is None:
+            return
+        try:
+            self._batch_generator.remove(uids)
+        except Exception as exc:  # noqa: BLE001 — eviction is best-effort
+            logger.warning(f"BatchGenerator.remove failed for failed uids {uids}: {exc!s}")
+        mx.clear_cache()
+        logger.warning(f"BatchScheduler evicted failed uids {uids} from the batch")
 
     def _fail_all_active(self, exc: BaseException) -> None:
         for uid, state in list(self._active.items()):
